@@ -6,10 +6,11 @@ use App\Models\Concerns\UsesCorporateNaming;
 use App\Traits\Tenantable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Nfe extends Model
 {
-    use Tenantable, UsesCorporateNaming;
+    use Tenantable, UsesCorporateNaming, SoftDeletes;
 
     protected $table = 'nota_fiscal';
     protected $primaryKey = 'id_nota_fiscal';
@@ -32,9 +33,14 @@ class Nfe extends Model
         'id_destinatario',
         'id_natureza_operacao',
         'destinatario_documento',
+        'data_cancelamento',
+        'motivo_cancelamento',
     ];
 
-    protected $casts = ['payload' => 'array'];
+    protected $casts = [
+        'payload' => 'array',
+        'data_cancelamento' => 'datetime',
+    ];
     protected $appends = ['id', 'empresa_id', 'usuario_id', 'cliente_id', 'destinatario_id', 'natureza_operacao_id'];
 
     public function getUsuarioIdAttribute(): mixed

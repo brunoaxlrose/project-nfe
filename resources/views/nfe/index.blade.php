@@ -1,11 +1,6 @@
 <x-app-layout title="Histórico de Notas" header="Notas fiscais de saída" :partial="$partial ?? false">
-    <div x-data="notasPage" class="mx-auto w-full max-w-[1800px]">
-        <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-                <p class="mb-2 text-sm font-medium text-blue-600">Fiscal / Documentos</p>
-                <h1 class="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Notas fiscais de saída</h1>
-                <p class="mt-2 text-sm text-slate-500">Consulte, exporte e acompanhe as operações fiscais da sua empresa.</p>
-            </div>
+    <div x-data="notasPage" class="mx-auto w-full max-w-[1800px] mt-4">
+        <div class="mb-6 flex justify-end">
             <div class="flex flex-wrap gap-2">
                 <button type="button" @click="imprimir" class="inline-flex items-center gap-2 border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                     <span aria-hidden="true">⎙</span>
@@ -115,7 +110,8 @@
                                     <div x-show="activeMenu === nota.id" x-cloak @click.outside="activeMenu = null" class="absolute right-5 top-12 z-30 w-60 border border-slate-200 bg-white py-1 text-left shadow-xl">
                                         <button x-show="can('nfe.baixar')" x-cloak type="button" @click="download(nota, 'pdf')" class="action-item"><span>▣</span> Gerar PDF DANFE / imprimir</button>
                                         <button x-show="can('nfe.baixar')" x-cloak type="button" @click="download(nota, 'xml')" class="action-item"><span>&lt;/&gt;</span> Exportar XML</button>
-                                        <button x-show="can('nfe.cancelar')" x-cloak type="button" @click="abrirModal('cancelar', nota)" :disabled="!['autorizada', 'simulada'].includes(nota.status)" class="action-item disabled:cursor-not-allowed disabled:opacity-40"><span>×</span> Cancelar NF-e</button>
+                                        <button x-show="can('nfe.cancelar') && ['autorizada', 'emitida', 'Emitida DANFE'].includes(nota.status)" x-cloak type="button" @click="abrirModal('cancelar', nota)" class="action-item"><span>×</span> Cancelar NF-e</button>
+                                        <button x-show="nota.status === 'rascunho'" x-cloak type="button" @click="excluirRascunho(nota)" class="action-item text-red-600 hover:text-red-800"><span>🗑</span> Excluir Rascunho</button>
                                         <button x-show="can('nfe.cce')" x-cloak type="button" @click="abrirModal('cce', nota)" :disabled="nota.status !== 'autorizada'" class="action-item disabled:cursor-not-allowed disabled:opacity-40"><span>✎</span> Carta de correção (CC-e)</button>
                                         <button x-show="can('nfe.clonar')" x-cloak type="button" @click="clonar(nota)" class="action-item"><span>⧉</span> Clonar nota</button>
                                     </div>
@@ -483,6 +479,22 @@
                         this.abrirModalEmissao();
                     } catch (error) {
                         window.fiscalToast?.('error', error.message, 'Clonagem indisponível');
+                    }
+                },
+
+                async excluirRascunho(nota) {
+                    this.activeMenu = null;
+                    if (!confirm('Deseja realmente excluir este rascunho de nota fiscal?')) {
+                        return;
+                    }
+                    try {
+                        const response = await fiscalFetch('/api/faturamento/notas/' + nota.id, { method: 'DELETE', headers: this.headers() });
+                        const data = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(data.message || 'Não foi possível excluir o rascunho.');
+                        window.fiscalToast?.('success', 'Rascunho excluído com sucesso.', 'Sucesso');
+                        this.load(this.page);
+                    } catch (error) {
+                        window.fiscalToast?.('error', error.message, 'Erro ao excluir');
                     }
                 },
                 }));

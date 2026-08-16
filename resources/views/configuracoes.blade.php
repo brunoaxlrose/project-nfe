@@ -1,10 +1,5 @@
 <x-app-layout title="Preferências" header="Preferências da empresa" :partial="$partial ?? false">
-    <div x-data="configManager()" class="mx-auto w-full max-w-[1600px]">
-        <div class="mb-6">
-            <p class="text-sm font-medium text-blue-600">Administração / Preferências</p>
-            <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-950">Configurações da empresa</h1>
-            <p class="mt-2 text-sm text-slate-500">Dados fiscais, emissão, comunicação com a SEFAZ e certificado digital.</p>
-        </div>
+    <div x-data="configManager()" class="w-full mt-2">
 
         <div x-show="error" x-cloak class="mb-5 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
             <span x-text="error"></span>

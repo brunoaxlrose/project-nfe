@@ -67,13 +67,14 @@
                 activeTab: null,
                 permissions: [],
                 permissionsReady: false,
-                frontendVersion: '2026-08-16-usuarios-modal-v2',
+                frontendVersion: '2026-08-16-fornecedores-v3',
                 routes: {
                     '/dashboard': { id: 'dashboard', titulo: 'Início', permission: 'menu.dashboard' },
                     '/dashboard/nfe/nova': { id: 'nfe-create', titulo: 'Nova NF-e', permission: 'nfe.criar' },
-                    '/dashboard/notas': { id: 'nfe-index', titulo: 'Histórico de notas', permission: 'nfe.visualizar' },
+                    '/dashboard/notas': { id: 'nfe-index', titulo: 'Notas Fiscais (NF-e)', permission: 'nfe.visualizar' },
                     '/dashboard/configuracoes': { id: 'configuracoes', titulo: 'Configurações', permission: 'menu.configuracoes' },
                     '/dashboard/usuarios': { id: 'usuarios', titulo: 'Usuários e permissões', permission: 'menu.usuarios' },
+                    '/dashboard/fornecedores': { id: 'fornecedores', titulo: 'Fornecedores', permission: 'fornecedores.visualizar' },
                 },
                 init() {
                     if (this.initialized) {
@@ -423,7 +424,16 @@
                     });
                 },
                 normalizeMasks(container) {
-                    container.querySelectorAll('[x-mask]').forEach((input) => {
+                    container.querySelectorAll('input').forEach((input) => {
+                        let hasDynamic = false;
+                        for (let i = 0; i < input.attributes.length; i++) {
+                            const name = input.attributes[i].name;
+                            if (name.includes('dynamic')) {
+                                hasDynamic = true;
+                                break;
+                            }
+                        }
+                        if (hasDynamic) return;
                         const mask = input.getAttribute('x-mask');
 
                         if (mask && mask.startsWith("'") && mask.endsWith("'")) {
@@ -463,15 +473,6 @@
                 isMenuActive(id) {
                     return this.activeTab === id;
                 },
-                toggleSidebar() {
-                    if (window.innerWidth < 1024) {
-                        this.sidebarOpen = !this.sidebarOpen;
-                        return;
-                    }
-
-                    this.sidebarCollapsed = !this.sidebarCollapsed;
-                    localStorage.setItem('fiscalflow_sidebar_collapsed', this.sidebarCollapsed ? '1' : '0');
-                },
                 syncPanes() {
                     this.$refs.workspace?.querySelectorAll('[data-tab-pane]').forEach((pane) => {
                         pane.hidden = pane.dataset.tabId !== this.activeTab;
@@ -491,67 +492,128 @@
         .field[type=file] { padding: .45rem; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 antialiased" x-data="tabManager" @keydown.escape.window="sidebarOpen = false; profileOpen = false">
-    <div class="min-h-screen" style="--sidebar-width: 18rem" :style="'--sidebar-width: ' + (sidebarCollapsed ? '5rem' : '18rem')">
-        <div x-cloak x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 z-30 bg-slate-950/50 lg:hidden" @click="sidebarOpen = false"></div>
+<body class="bg-slate-50 text-slate-900 antialiased" x-data="tabManager" @keydown.escape.window="profileOpen = false; activeDropdown = null">
+    <div class="min-h-screen flex flex-col">
+        <!-- Topbar / Header -->
+        <header class="bg-slate-950 text-slate-300 border-b border-slate-800 sticky top-0 z-50">
+            <div class="mx-auto max-w-[1800px] px-4 sm:px-6 lg:px-8">
+                <div class="flex h-16 items-center justify-between">
+                    <!-- Logo / Brand & Navigation -->
+                    <div class="flex items-center gap-8">
+                        <div class="flex items-center gap-3 cursor-pointer" @click="openTab(dashboardRoute())">
+                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-lg font-bold text-white">F</div>
+                            <span class="font-bold tracking-tight text-white text-lg">FiscalFlow</span>
+                        </div>
 
-        <aside class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col bg-slate-950 text-slate-300 transition-[width,transform] duration-200 lg:w-[var(--sidebar-width)] lg:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'">
-            <div class="flex h-20 items-center gap-3 border-b border-white/10 px-4" :class="sidebarCollapsed ? 'lg:justify-center' : 'lg:px-6'">
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-lg font-bold text-white">F</div>
-                <div x-show="!sidebarCollapsed" x-transition class="min-w-0"><p class="font-semibold tracking-tight text-white">FiscalFlow</p><p class="text-xs text-slate-500">Gestão fiscal inteligente</p></div>
-                <button type="button" class="ml-auto hidden rounded-lg p-2 text-slate-500 hover:bg-white/10 hover:text-white lg:block" @click="toggleSidebar" :title="sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'" aria-label="Alternar menu lateral"><x-icon name="panel" class="h-5 w-5" /></button>
-                <button type="button" class="ml-auto rounded-lg p-2 text-slate-500 hover:bg-white/10 hover:text-white lg:hidden" @click="sidebarOpen = false" aria-label="Fechar menu"><x-icon name="close" class="h-5 w-5" /></button>
-            </div>
+                        <!-- Desktop Top Navigation Menu with Alpine Dropdowns -->
+                        <nav x-data="{ activeDropdown: null }" @click.outside="activeDropdown = null" class="hidden lg:flex items-center gap-1">
+                            <!-- Meu Negócio -->
+                            <div class="relative">
+                                <button @click="activeDropdown = activeDropdown === 'negocio' ? null : 'negocio'" class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium hover:text-white rounded-md transition" :class="activeDropdown === 'negocio' ? 'text-white bg-slate-900' : ''">
+                                    Meu Negócio <x-icon name="chevron-down" class="h-4 w-4" />
+                                </button>
+                               <div x-show="activeDropdown === 'negocio'" x-cloak x-transition class="absolute left-0 mt-2 w-48 bg-slate-900 border border-slate-800 rounded-lg shadow-xl py-1 text-sm text-slate-400 z-50">
+                                    <a href="#" @click.prevent="openTab({id: 'dashboard', titulo: 'Início', permission: 'menu.dashboard', url: '{{ route('dashboard') }}'}); activeDropdown = null" class="block px-4 py-2 hover:bg-slate-800 hover:text-white transition">Início / Dashboard</a>
+                                </div>
+                            </div>
 
-            <div class="sidebar-scroll flex-1 overflow-y-auto px-3 py-6" :class="sidebarCollapsed ? 'lg:px-2' : 'lg:px-4'">
-                <p x-show="!sidebarCollapsed" class="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Workspace</p>
-                <nav class="space-y-1" aria-label="Navegação principal">
-                    <a x-show="can('menu.dashboard')" x-cloak href="{{ route('dashboard') }}" title="Início" :aria-current="isMenuActive('dashboard') ? 'page' : null" class="group flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition" :class="(isMenuActive('dashboard') ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:bg-white/10 hover:text-white') + (sidebarCollapsed ? ' lg:justify-center' : '')"><x-icon name="home" class="h-5 w-5 shrink-0" /><span x-show="!sidebarCollapsed" class="truncate">Início</span></a>
-                    <a x-show="can('nfe.criar')" x-cloak href="{{ route('nfe.create') }}" title="Emitir NF-e" :aria-current="isMenuActive('nfe-create') ? 'page' : null" class="group flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition" :class="(isMenuActive('nfe-create') ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:bg-white/10 hover:text-white') + (sidebarCollapsed ? ' lg:justify-center' : '')"><x-icon name="plus" class="h-5 w-5 shrink-0" /><span x-show="!sidebarCollapsed" class="truncate">Emitir NF-e</span></a>
-                    <a x-show="can('nfe.visualizar')" x-cloak href="{{ route('nfe.index') }}" title="Histórico de notas" :aria-current="isMenuActive('nfe-index') ? 'page' : null" class="group flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition" :class="(isMenuActive('nfe-index') ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:bg-white/10 hover:text-white') + (sidebarCollapsed ? ' lg:justify-center' : '')"><x-icon name="receipt" class="h-5 w-5 shrink-0" /><span x-show="!sidebarCollapsed" class="truncate">Histórico de notas</span></a>
-                </nav>
+                            <!-- Cadastros -->
+                            <div class="relative">
+                                <button @click="activeDropdown = activeDropdown === 'cadastros' ? null : 'cadastros'" class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium hover:text-white rounded-md transition" :class="activeDropdown === 'cadastros' ? 'text-white bg-slate-900' : ''">
+                                    Cadastros <x-icon name="chevron-down" class="h-4 w-4" />
+                                </button>
+                                <div x-show="activeDropdown === 'cadastros'" x-cloak x-transition class="absolute left-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-lg shadow-xl p-4 grid grid-cols-1 gap-2 text-sm text-slate-400 z-50">
+                                    <div>
+                                        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Cadastros</p>
+                                        <a x-show="can('produtos.visualizar')" x-cloak href="#" @click.prevent="openTab({id: 'produtos', titulo: 'Produtos', permission: 'produtos.visualizar', url: '/dashboard/produtos'}); activeDropdown = null" class="block py-1 hover:text-white transition">Produtos</a>
+                                        <a x-show="can('clientes.visualizar')" x-cloak href="#" @click.prevent="openTab({id: 'clientes', titulo: 'Clientes e Fornecedores', permission: 'clientes.visualizar', url: '/dashboard/clientes'}); activeDropdown = null" class="block py-1 hover:text-white transition">Clientes e Fornecedores</a>
+                                    </div>
+                                </div>
+                            </div>
 
-                <div x-show="!sidebarCollapsed && (can('nfe.criar') || can('nfe.visualizar'))" x-cloak class="mt-8 border-t border-white/10 pt-6">
-                    <p class="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Mais acessados</p>
-                    <div class="space-y-1">
-                        <a x-show="can('nfe.criar')" x-cloak href="{{ route('nfe.create') }}" class="flex items-center gap-3 px-3 py-2 text-xs text-slate-400 transition hover:text-white"><span class="h-1.5 w-1.5 bg-blue-400"></span>Nova emissão</a>
-                        <a x-show="can('nfe.visualizar')" x-cloak href="{{ route('nfe.index') }}" class="flex items-center gap-3 px-3 py-2 text-xs text-slate-400 transition hover:text-white"><span class="h-1.5 w-1.5 bg-slate-500"></span>Consultar notas</a>
+                            <!-- Vendas -->
+                            <div class="relative">
+                                <button @click="activeDropdown = activeDropdown === 'vendas' ? null : 'vendas'" class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium hover:text-white rounded-md transition" :class="activeDropdown === 'vendas' ? 'text-white bg-slate-900' : ''">
+                                    Vendas <x-icon name="chevron-down" class="h-4 w-4" />
+                                </button>
+                                <div x-show="activeDropdown === 'vendas'" x-cloak x-transition class="absolute left-0 mt-2 w-48 bg-slate-900 border border-slate-800 rounded-lg shadow-xl py-1 text-sm text-slate-400 z-50">
+                                    <a x-show="can('nfe.visualizar')" x-cloak href="#" @click.prevent="openTab({id: 'nfe-index', titulo: 'Histórico de notas', permission: 'nfe.visualizar', url: '{{ route('nfe.index') }}'}); activeDropdown = null" class="block px-4 py-2 hover:bg-slate-800 hover:text-white transition">Notas Fiscais (NF-e)</a>
+                                    <a x-show="can('nfe.criar')" x-cloak href="#" @click.prevent="openTab({id: 'nfe-create', titulo: 'Nova NF-e', permission: 'nfe.criar', url: '{{ route('nfe.create') }}'}); activeDropdown = null" class="block px-4 py-2 hover:bg-slate-800 hover:text-white transition">Emitir NF-e</a>
+                                </div>
+                            </div>
+                        </nav>
+                    </div>
+
+                    <!-- User actions & Mobile Navigation -->
+                    <div class="flex items-center gap-4">
+                        <span class="hidden md:inline-flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 text-xs font-medium text-emerald-400 rounded-full">
+                            <span class="h-1.5 w-1.5 bg-emerald-500 rounded-full"></span> Homologação SEFAZ
+                        </span>
+
+                        <div class="relative">
+                            <button type="button" class="flex items-center gap-2 border border-slate-800 bg-slate-900 px-3 py-2 text-sm font-medium text-slate-300 hover:text-white rounded-md transition" @click="profileOpen = !profileOpen" :aria-expanded="profileOpen">
+                                <div id="sidebar-initials" class="flex h-7 w-7 items-center justify-center rounded-full bg-blue-500/20 text-xs font-semibold text-blue-300">FF</div>
+                                <span class="hidden sm:inline" id="sidebar-user-name">Usuário</span>
+                                <x-icon name="chevron-down" class="h-4 w-4" />
+                            </button>
+                            <div x-cloak x-show="profileOpen" x-transition @click.outside="profileOpen = false" class="absolute right-0 mt-2 w-64 border border-slate-800 bg-slate-950 p-2 shadow-xl rounded-lg z-50">
+                                <div class="border-b border-slate-800 px-3 py-3">
+                                    <p class="text-sm font-semibold text-white" id="profile-menu-name">Usuário</p>
+                                    <p class="mt-1 text-xs text-slate-500" id="profile-menu-role">Autenticado</p>
+                                </div>
+                                <a x-show="can('menu.configuracoes')" x-cloak href="#" @click.prevent="openTab({id: 'configuracoes', titulo: 'Configurações', permission: 'menu.configuracoes', url: '{{ route('configuracoes') }}'}); profileOpen = false" class="flex items-center gap-3 px-3 py-3 text-sm text-slate-300 hover:bg-slate-900 hover:text-white rounded-md"><x-icon name="settings" class="h-4 w-4" /> Configurações</a>
+                                <a x-show="can('menu.usuarios')" x-cloak href="#" @click.prevent="openTab({id: 'usuarios', titulo: 'Usuários e permissões', permission: 'menu.usuarios', url: '{{ route('usuarios.index') }}'}); profileOpen = false" class="flex items-center gap-3 px-3 py-3 text-sm text-slate-300 hover:bg-slate-900 hover:text-white rounded-md"><x-icon name="users" class="h-4 w-4" /> Usuários e permissões</a>
+                                <button type="button" onclick="logoutFiscalFlow()" class="flex w-full items-center gap-3 px-3 py-3 text-left text-sm text-red-400 hover:bg-slate-900 rounded-md"><x-icon name="logout" class="h-4 w-4" /> Sair do sistema</button>
+                            </div>
+                        </div>
+
+                        <!-- Mobile navigation toggle -->
+                        <button class="p-2 text-slate-400 hover:text-white lg:hidden rounded-md" @click="sidebarOpen = !sidebarOpen" aria-label="Abrir menu" :aria-expanded="sidebarOpen">
+                            <x-icon name="menu" class="h-6 w-6" />
+                        </button>
                     </div>
                 </div>
+            </div>
 
-                <div x-show="!sidebarCollapsed" class="mt-8 border border-white/10 bg-white/5 p-4">
-                    <div class="flex items-start gap-3"><span class="mt-0.5 h-2.5 w-2.5 shrink-0 bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.12)]"></span><div><p class="text-sm font-medium text-white">Ambiente seguro</p><p class="mt-1 text-xs leading-5 text-slate-400">Homologação SEFAZ ativa</p></div></div>
+            <!-- Mobile menu drawer -->
+            <div x-cloak x-show="sidebarOpen" x-transition class="lg:hidden bg-slate-900 border-t border-slate-800 px-4 py-3 space-y-1">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 px-3 py-1">Menu</p>
+                <a href="#" @click.prevent="openTab({id: 'dashboard', titulo: 'Início', permission: 'menu.dashboard', url: '{{ route('dashboard') }}'}); sidebarOpen = false" class="block px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md text-sm">Dashboard</a>
+                <a x-show="can('nfe.visualizar')" x-cloak href="#" @click.prevent="openTab({id: 'nfe-index', titulo: 'Histórico de notas', permission: 'nfe.visualizar', url: '{{ route('nfe.index') }}'}); sidebarOpen = false" class="block px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md text-sm">Notas Fiscais (NF-e)</a>
+                <a x-show="can('clientes.visualizar')" x-cloak href="#" @click.prevent="openTab({id: 'clientes', titulo: 'Clientes e Fornecedores', permission: 'clientes.visualizar', url: '/dashboard/clientes'}); sidebarOpen = false" class="block px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md text-sm">Clientes e Fornecedores</a>
+                <a x-show="can('nfe.criar')" x-cloak href="#" @click.prevent="openTab({id: 'nfe-create', titulo: 'Nova NF-e', permission: 'nfe.criar', url: '{{ route('nfe.create') }}'}); sidebarOpen = false" class="block px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md text-sm">Emitir NF-e</a>
+            </div>
+        </header>
+
+        <!-- Thin Tabs Bar under top header with breadcrumb -->
+        <div x-cloak x-show="tabs.length" class="bg-white border-b border-slate-200 px-4 pt-2">
+            <div class="w-full flex items-center justify-between mb-1.5 text-xs text-slate-400">
+                <div class="flex items-center gap-1.5">
+                    <span>FiscalFlow</span>
+                    <span>/</span>
+                    <span x-show="activeTabData?.id === 'nfe-index' || activeTabData?.id === 'nfe-create'" x-cloak>Vendas</span>
+                    <span x-show="activeTabData?.id === 'nfe-index' || activeTabData?.id === 'nfe-create'" x-cloak>/</span>
+                    <span x-show="activeTabData?.id === 'fornecedores' || activeTabData?.id === 'produtos' || activeTabData?.id === 'clientes'" x-cloak>Cadastros</span>
+                    <span x-show="activeTabData?.id === 'fornecedores' || activeTabData?.id === 'produtos' || activeTabData?.id === 'clientes'" x-cloak>/</span>
+                    <span x-show="activeTabData?.id === 'usuarios' || activeTabData?.id === 'configuracoes'" x-cloak>Meu Negócio</span>
+                    <span x-show="activeTabData?.id === 'usuarios' || activeTabData?.id === 'configuracoes'" x-cloak>/</span>
+                    <span class="text-blue-600 font-semibold" x-text="activeTabData?.id === 'nfe-index' ? 'Notas Fiscais (NF-e)' : (activeTabData?.titulo || 'Início')"></span>
                 </div>
             </div>
-
-            <div class="border-t border-white/10 p-3" :class="sidebarCollapsed ? 'lg:px-2' : 'lg:p-4'">
-                <button type="button" class="flex w-full items-center gap-3 px-2 py-2 text-left transition hover:bg-white/5" :class="sidebarCollapsed ? 'lg:justify-center' : ''" @click="profileOpen = !profileOpen" :aria-expanded="profileOpen">
-                    <div id="sidebar-initials" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-sm font-semibold text-blue-300">FF</div>
-                    <div x-show="!sidebarCollapsed" class="min-w-0"><p id="sidebar-user-name" class="truncate text-sm font-medium text-white">Usuário</p><p id="sidebar-user-role" class="truncate text-xs text-slate-500">Autenticado</p></div>
-                    <x-icon x-show="!sidebarCollapsed" name="chevron-up" class="ml-auto h-4 w-4 text-slate-500" />
-                </button>
+            <div class="w-full flex min-w-0 items-end gap-1 overflow-x-auto" role="tablist" aria-label="Abas abertas">
+                <template x-for="tab in tabs" :key="tab.id">
+                    <div class="group flex min-w-[9rem] max-w-[16rem] shrink-0 items-center border-b-2 px-3 py-1.5 text-sm" :class="activeTab === tab.id ? 'border-blue-600 text-blue-700 font-semibold' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'" role="tab" :aria-selected="activeTab === tab.id">
+                        <button type="button" class="min-w-0 flex-1 truncate text-left" @click="activateTab(tab.id)" x-text="tab.titulo"></button>
+                        <span x-show="tab.loading" x-cloak class="ml-2 h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" aria-label="Carregando"></span>
+                        <button type="button" @click="closeTab(tab.id)" class="ml-2 rounded p-0.5 text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100" :class="activeTab === tab.id ? 'opacity-100' : ''" :aria-label="'Fechar aba ' + tab.titulo">×</button>
+                    </div>
+                </template>
             </div>
-        </aside>
+        </div>
 
-        <div class="lg:pl-[var(--sidebar-width)]">
-            <header class="sticky top-0 z-20 flex min-h-20 items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-8">
-                <div class="flex min-w-0 items-center gap-3"><button class="shrink-0 p-2 text-slate-500 hover:bg-slate-100 lg:hidden" @click="sidebarOpen = true" aria-label="Abrir menu" :aria-expanded="sidebarOpen"><x-icon name="menu" class="h-6 w-6" /></button><p class="truncate font-semibold text-slate-900" x-text="activeTabData?.titulo || 'FiscalFlow'"></p></div>
-                <div class="relative flex shrink-0 items-center gap-2 sm:gap-3"><span class="hidden items-center gap-2 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 sm:flex"><span class="h-1.5 w-1.5 bg-emerald-500"></span> Sistema operacional</span><button type="button" class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white sm:hidden" @click="profileOpen = !profileOpen" :aria-expanded="profileOpen" aria-label="Abrir perfil"><span id="header-initials">FF</span></button><button type="button" class="hidden items-center gap-2 border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 sm:flex" @click="profileOpen = !profileOpen" :aria-expanded="profileOpen"><span id="header-user-name">Usuário</span><x-icon name="chevron-down" class="h-4 w-4" /></button><div x-cloak x-show="profileOpen" x-transition @click.outside="profileOpen = false" class="absolute right-0 top-12 z-50 w-64 border border-slate-200 bg-white p-2 shadow-xl"><div class="border-b border-slate-100 px-3 py-3"><p class="text-sm font-semibold text-slate-900" id="profile-menu-name">Usuário</p><p class="mt-1 text-xs text-slate-500" id="profile-menu-role">Autenticado</p></div><a x-show="can('menu.configuracoes')" x-cloak href="{{ route('configuracoes') }}" class="flex items-center gap-3 px-3 py-3 text-sm text-slate-700 hover:bg-slate-50" :class="isMenuActive('configuracoes') ? 'text-blue-700' : ''"><x-icon name="settings" class="h-4 w-4" /> Configurações</a><a x-show="can('menu.usuarios')" x-cloak href="{{ route('usuarios.index') }}" class="flex items-center gap-3 px-3 py-3 text-sm text-slate-700 hover:bg-slate-50" :class="isMenuActive('usuarios') ? 'text-blue-700' : ''"><x-icon name="users" class="h-4 w-4" /> Usuários e permissões</a><button type="button" onclick="logoutFiscalFlow()" class="flex w-full items-center gap-3 px-3 py-3 text-left text-sm text-slate-700 hover:bg-slate-50"><x-icon name="logout" class="h-4 w-4" /> Sair do sistema</button></div></div>
-            </header>
-
-            <div x-cloak x-show="tabs.length" class="border-b border-slate-200 bg-white px-3 sm:px-8">
-                <div class="flex min-w-0 items-end gap-1 overflow-x-auto pt-2" role="tablist" aria-label="Abas abertas">
-                    <template x-for="tab in tabs" :key="tab.id">
-                        <div class="group flex min-w-[9rem] max-w-[16rem] shrink-0 items-center border-b-2 px-3 py-2.5 text-sm" :class="activeTab === tab.id ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'" role="tab" :aria-selected="activeTab === tab.id">
-                            <button type="button" class="min-w-0 flex-1 truncate text-left font-medium" @click="activateTab(tab.id)" x-text="tab.titulo"></button>
-                            <span x-show="tab.loading" x-cloak class="ml-2 h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" aria-label="Carregando"></span>
-                            <button type="button" @click="closeTab(tab.id)" class="ml-2 rounded p-0.5 text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100" :class="activeTab === tab.id ? 'opacity-100' : ''" :aria-label="'Fechar aba ' + tab.titulo">×</button>
-                        </div>
-                    </template>
-                </div>
-            </div>
-
-            <main class="mx-auto max-w-[1800px] p-4 sm:p-6 lg:p-8">
+        <div class="flex-1 flex flex-col">
+            <!-- Content area maximizing screen utilization -->
+            <main class="w-full px-4 py-3 lg:px-6">
                 <div x-ref="workspace" class="workspace-container">
                     <div data-tab-pane>{{ $slot }}</div>
                 </div>

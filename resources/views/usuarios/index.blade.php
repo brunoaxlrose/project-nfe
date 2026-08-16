@@ -1,11 +1,6 @@
 <x-app-layout title="Usuários e permissões" :partial="$partial ?? false">
-    <div class="mx-auto max-w-[1600px]" x-data="usuarioManager" x-init="init()">
-        <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-                <p class="mb-2 text-sm font-medium text-blue-600">Administração / Acessos</p>
-                <h1 class="text-2xl font-bold tracking-tight text-slate-950">Usuários e permissões</h1>
-                <p class="mt-2 text-sm text-slate-500">Gerencie quem acessa a empresa e quais ações cada perfil pode executar.</p>
-            </div>
+    <div class="w-full mt-2" x-data="usuarioManager" x-init="init()">
+        <div class="mb-6 flex justify-end">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <button type="button" @click="abrirGerenciarPerfis" class="border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Gerenciar Perfil</button>
                 <button type="button" @click="abrirNovoUsuario" class="bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">Novo usuário</button>
@@ -22,32 +17,36 @@
                     <span class="text-xs text-slate-500" x-text="usuarios.length + ' usuário(s)'"></span>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full min-w-[820px] text-sm">
-                        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <table class="w-full min-w-[820px] text-sm border-collapse border border-slate-200">
+                        <thead class="bg-slate-100 text-center text-xs uppercase tracking-wide text-slate-700 border-b border-slate-200">
                             <tr>
-                                <th class="px-5 py-3">Nome</th>
-                                <th class="px-5 py-3">E-mail</th>
-                                <th class="px-5 py-3">Perfil</th>
-                                <th class="px-5 py-3">Acessos extras</th>
-                                <th class="px-5 py-3">Status</th>
-                                <th class="px-5 py-3 text-right">Ações</th>
+                                <th class="px-5 py-3 border border-slate-200 text-center">Nome</th>
+                                <th class="px-5 py-3 border border-slate-200 text-center">E-mail</th>
+                                <th class="px-5 py-3 border border-slate-200 text-center">Perfil</th>
+                                <th class="px-5 py-3 border border-slate-200 text-center">Acessos extras</th>
+                                <th class="px-5 py-3 border border-slate-200 text-center">Status</th>
+                                <th class="px-5 py-3 border border-slate-200 text-center">Ações</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            <template x-for="usuario in usuarios" :key="usuario.id">
-                                <tr class="hover:bg-slate-50">
-                                    <td class="px-5 py-4 font-medium text-slate-900" x-text="usuario.nome"></td>
-                                    <td class="px-5 py-4 text-slate-600" x-text="usuario.email"></td>
-                                    <td class="px-5 py-4 text-slate-600" x-text="usuario.perfil?.nome || 'Sem perfil'"></td>
-                                    <td class="px-5 py-4">
+                        <tbody class="divide-y divide-slate-200 text-center">
+                            <template x-for="usuario in paginatedUsuarios()" :key="usuario.id">
+                                <tr class="odd:bg-white even:bg-slate-50 hover:bg-slate-100/80 transition-colors">
+                                    <td class="px-5 py-3.5 border border-slate-200 font-medium text-slate-900 text-center" x-text="usuario.nome"></td>
+                                    <td class="px-5 py-3.5 border border-slate-200 text-slate-600 text-center" x-text="usuario.email"></td>
+                                    <td class="px-5 py-3.5 border border-slate-200 text-slate-600 text-center" x-text="usuario.perfil?.nome || 'Sem perfil'"></td>
+                                    <td class="px-5 py-3.5 border border-slate-200 text-center">
                                         <span class="inline-flex bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600" x-show="!usuario.permissoes_especificas?.length">Nenhum</span>
                                         <span x-show="usuario.permissoes_especificas?.length" x-cloak class="inline-flex bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700" x-text="usuario.permissoes_especificas.length + ' permissão(ões)'"></span>
                                     </td>
-                                    <td class="px-5 py-4">
+                                    <td class="px-5 py-3.5 border border-slate-200 text-center">
                                         <span class="inline-flex px-2 py-1 text-xs font-semibold" :class="usuario.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'" x-text="usuario.ativo ? 'Ativo' : 'Inativo'"></span>
                                     </td>
-                                    <td class="px-5 py-4 text-right">
-                                        <button type="button" @click="editarUsuario(usuario)" class="text-sm font-semibold text-blue-700 hover:text-blue-900">Editar</button>
+                                    <td class="px-5 py-3.5 border border-slate-200 text-center">
+                                        <button type="button" @click="editarUsuario(usuario)" class="text-blue-600 hover:text-blue-800 transition" title="Editar Usuário">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 inline">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                                            </svg>
+                                        </button>
                                     </td>
                                 </tr>
                             </template>
@@ -56,6 +55,20 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Datatable Pagination Footer -->
+                <div class="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3" x-show="totalPages() > 1" x-cloak>
+                    <div class="text-xs text-slate-500">
+                        Exibindo página <span class="font-bold text-slate-700" x-text="currentPage"></span> de <span class="font-bold text-slate-700" x-text="totalPages()"></span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button type="button" @click="prevPage" :disabled="currentPage === 1" class="px-2.5 py-1.5 border border-slate-300 rounded text-xs font-semibold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">Anterior</button>
+                        <template x-for="p in totalPages()" :key="p">
+                            <button type="button" @click="currentPage = p" class="px-3 py-1.5 border rounded text-xs font-semibold" :class="currentPage === p ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'" x-text="p"></button>
+                        </template>
+                        <button type="button" @click="nextPage" :disabled="currentPage === totalPages()" class="px-2.5 py-1.5 border border-slate-300 rounded text-xs font-semibold bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">Próximo</button>
+                    </div>
                 </div>
             </section>
 
@@ -342,10 +355,25 @@
                     mensagemPerfil: '',
                     erro: false,
                     erroPerfil: false,
+                    currentPage: 1,
+                    itemsPerPage: 10,
                     form: { id: null, nome: '', email: '', id_perfil: '', ativo: true, permissoes_especificas: [], password: '', password_confirmation: '' },
                     perfilForm: { id: null, nome: '' },
                     usuarioPerfilFormId: '',
                     init() { this.carregarTudo(); },
+                    paginatedUsuarios() {
+                        const start = (this.currentPage - 1) * this.itemsPerPage;
+                        return this.usuarios.slice(start, start + this.itemsPerPage);
+                    },
+                    totalPages() {
+                        return Math.ceil(this.usuarios.length / this.itemsPerPage);
+                    },
+                    prevPage() {
+                        if (this.currentPage > 1) this.currentPage--;
+                    },
+                    nextPage() {
+                        if (this.currentPage < this.totalPages()) this.currentPage++;
+                    },
                     headers() { return { Authorization: 'Bearer ' + localStorage.getItem('nfe_token'), Accept: 'application/json', 'Content-Type': 'application/json' }; },
                     async parse(response) { const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.message || 'Não foi possível concluir a operação.'); return data; },
                     async carregarTudo() {

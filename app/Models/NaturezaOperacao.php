@@ -5,10 +5,11 @@ namespace App\Models;
 use App\Models\Concerns\UsesCorporateNaming;
 use App\Traits\Tenantable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class NaturezaOperacao extends Model
 {
-    use Tenantable, UsesCorporateNaming;
+    use Tenantable, UsesCorporateNaming, SoftDeletes;
 
     protected $table = 'natureza_operacao';
     protected $primaryKey = 'id_natureza_operacao';

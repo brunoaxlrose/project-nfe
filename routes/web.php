@@ -11,3 +11,6 @@ Route::get('/dashboard/nfe/nova', [WorkspaceController::class, 'nfeCreate'])->na
 Route::get('/dashboard/configuracoes', [WorkspaceController::class, 'configuracoes'])->name('configuracoes');
 Route::get('/dashboard/notas', [WorkspaceController::class, 'nfeIndex'])->name('nfe.index');
 Route::get('/dashboard/usuarios', [WorkspaceController::class, 'usuarios'])->name('usuarios.index');
+Route::get('/dashboard/fornecedores', [WorkspaceController::class, 'fornecedores'])->name('fornecedores.index');
+Route::get('/dashboard/clientes', [WorkspaceController::class, 'clientes'])->name('clientes.index');
+Route::get('/dashboard/produtos', [WorkspaceController::class, 'produtos'])->name('produtos.index');

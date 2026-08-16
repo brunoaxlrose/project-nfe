@@ -13,6 +13,90 @@ use Database\Seeders\NaturezaOperacaoSeeder;
 
 class CatalogController extends Controller
 {
+    public function index(Request $request): JsonResponse
+    {
+        $destinatarios = Destinatario::query()
+            ->where('tipo', 'fornecedor')
+            ->orderBy('nome_razao_social')
+            ->get();
+        return response()->json($destinatarios);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $request->merge([
+            'documento' => preg_replace('/\D/', '', (string) $request->input('documento', '')),
+            'cep' => preg_replace('/\D/', '', (string) $request->input('cep', '')),
+            'codigo_municipio_ibge' => preg_replace('/\D/', '', (string) $request->input('codigo_municipio_ibge', '')),
+        ]);
+
+        $data = $request->validate([
+            'nome_razao_social' => ['required', 'string', 'max:120'],
+            'documento' => ['required', 'digits_between:11,14'],
+            'inscricao_estadual' => ['nullable', 'string', 'max:14'],
+            'cep' => ['nullable', 'digits:8'],
+            'logradouro' => ['nullable', 'string', 'max:120'],
+            'numero' => ['nullable', 'string', 'max:20'],
+            'complemento' => ['nullable', 'string', 'max:120'],
+            'bairro' => ['nullable', 'string', 'max:60'],
+            'municipio' => ['nullable', 'string', 'max:60'],
+            'codigo_municipio_ibge' => ['nullable', 'digits:7'],
+            'uf' => ['nullable', 'size:2'],
+            'ativo' => ['sometimes', 'boolean'],
+        ]);
+
+        $data['tipo'] = 'fornecedor';
+        $data['ativo'] = $data['ativo'] ?? true;
+        $data['id_empresa'] = $request->user()->id_empresa;
+
+        $fornecedor = Destinatario::create($data);
+
+        return response()->json([
+            'message' => 'Fornecedor cadastrado com sucesso.',
+            'fornecedor' => $fornecedor,
+        ], 201);
+    }
+
+    public function update(Request $request, Destinatario $fornecedor): JsonResponse
+    {
+        $request->merge([
+            'documento' => preg_replace('/\D/', '', (string) $request->input('documento', '')),
+            'cep' => preg_replace('/\D/', '', (string) $request->input('cep', '')),
+            'codigo_municipio_ibge' => preg_replace('/\D/', '', (string) $request->input('codigo_municipio_ibge', '')),
+        ]);
+
+        $data = $request->validate([
+            'nome_razao_social' => ['required', 'string', 'max:120'],
+            'documento' => ['required', 'digits_between:11,14'],
+            'inscricao_estadual' => ['nullable', 'string', 'max:14'],
+            'cep' => ['nullable', 'digits:8'],
+            'logradouro' => ['nullable', 'string', 'max:120'],
+            'numero' => ['nullable', 'string', 'max:20'],
+            'complemento' => ['nullable', 'string', 'max:120'],
+            'bairro' => ['nullable', 'string', 'max:60'],
+            'municipio' => ['nullable', 'string', 'max:60'],
+            'codigo_municipio_ibge' => ['nullable', 'digits:7'],
+            'uf' => ['nullable', 'size:2'],
+            'ativo' => ['sometimes', 'boolean'],
+        ]);
+
+        $fornecedor->update($data);
+
+        return response()->json([
+            'message' => 'Fornecedor atualizado com sucesso.',
+            'fornecedor' => $fornecedor,
+        ]);
+    }
+
+    public function destroy(Destinatario $fornecedor): JsonResponse
+    {
+        $fornecedor->delete();
+
+        return response()->json([
+            'message' => 'Fornecedor excluído com sucesso.',
+        ]);
+    }
+
     public function destinatario(): JsonResponse
     {
         return response()->json(Destinatario::query()->where('ativo', true)->orderBy('nome_razao_social')->get());
@@ -61,6 +145,90 @@ class CatalogController extends Controller
         return response()->json(Cliente::query()->where('ativo', true)->when($term !== '', fn ($q) => $q->where(fn ($query) => $query->where('razao_social', 'ilike', "%{$term}%")->orWhere('documento', 'like', "%{$term}%")))->orderBy('razao_social')->limit(10)->get());
     }
 
+    public function clientesListar(Request $request): JsonResponse
+    {
+        $clientes = Cliente::query()
+            ->orderBy('razao_social')
+            ->get();
+        return response()->json($clientes);
+    }
+
+    public function clientesSalvar(Request $request): JsonResponse
+    {
+        $request->merge([
+            'documento' => preg_replace('/\D/', '', (string) $request->input('documento', '')),
+            'cep' => preg_replace('/\D/', '', (string) $request->input('cep', '')),
+            'codigo_ibge' => preg_replace('/\D/', '', (string) $request->input('codigo_ibge', '')),
+            'uf' => strtoupper((string) $request->input('uf', '')),
+        ]);
+
+        $data = $request->validate([
+            'razao_social' => ['required', 'string', 'max:120'],
+            'documento' => ['required', 'digits_between:11,14'],
+            'inscricao_estadual' => ['nullable', 'string', 'max:14'],
+            'cep' => ['nullable', 'digits:8'],
+            'logradouro' => ['nullable', 'string', 'max:120'],
+            'numero' => ['nullable', 'string', 'max:20'],
+            'complemento' => ['nullable', 'string', 'max:120'],
+            'bairro' => ['nullable', 'string', 'max:60'],
+            'cidade' => ['nullable', 'string', 'max:60'],
+            'codigo_ibge' => ['nullable', 'digits:7'],
+            'uf' => ['nullable', 'size:2'],
+            'ativo' => ['sometimes', 'boolean'],
+        ]);
+
+        $data['ativo'] = $data['ativo'] ?? true;
+        $data['id_empresa'] = $request->user()->id_empresa;
+
+        $cliente = Cliente::create($data);
+
+        return response()->json([
+            'message' => 'Cliente cadastrado com sucesso.',
+            'cliente' => $cliente,
+        ], 201);
+    }
+
+    public function clientesEditar(Request $request, Cliente $cliente): JsonResponse
+    {
+        $request->merge([
+            'documento' => preg_replace('/\D/', '', (string) $request->input('documento', '')),
+            'cep' => preg_replace('/\D/', '', (string) $request->input('cep', '')),
+            'codigo_ibge' => preg_replace('/\D/', '', (string) $request->input('codigo_ibge', '')),
+            'uf' => strtoupper((string) $request->input('uf', '')),
+        ]);
+
+        $data = $request->validate([
+            'razao_social' => ['required', 'string', 'max:120'],
+            'documento' => ['required', 'digits_between:11,14'],
+            'inscricao_estadual' => ['nullable', 'string', 'max:14'],
+            'cep' => ['nullable', 'digits:8'],
+            'logradouro' => ['nullable', 'string', 'max:120'],
+            'numero' => ['nullable', 'string', 'max:20'],
+            'complemento' => ['nullable', 'string', 'max:120'],
+            'bairro' => ['nullable', 'string', 'max:60'],
+            'cidade' => ['nullable', 'string', 'max:60'],
+            'codigo_ibge' => ['nullable', 'digits:7'],
+            'uf' => ['nullable', 'size:2'],
+            'ativo' => ['sometimes', 'boolean'],
+        ]);
+
+        $cliente->update($data);
+
+        return response()->json([
+            'message' => 'Cliente atualizado com sucesso.',
+            'cliente' => $cliente,
+        ]);
+    }
+
+    public function clientesExcluir(Cliente $cliente): JsonResponse
+    {
+        $cliente->delete();
+
+        return response()->json([
+            'message' => 'Cliente excluído com sucesso.',
+        ]);
+    }
+
     public function importarCliente(Request $request): JsonResponse
     {
         $request->merge([
@@ -97,5 +265,69 @@ class CatalogController extends Controller
     {
         $term = trim((string) $request->query('q', ''));
         return response()->json(Produto::query()->where('ativo', true)->when($term !== '', fn ($q) => $q->where(fn ($query) => $query->where('descricao', 'ilike', "%{$term}%")->orWhere('codigo', 'like', "%{$term}%")))->orderBy('descricao')->limit(10)->get());
+    }
+
+    public function produtosListar(Request $request): JsonResponse
+    {
+        $produtos = Produto::query()
+            ->orderBy('descricao')
+            ->get();
+        return response()->json($produtos);
+    }
+
+    public function produtosSalvar(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'codigo' => ['required', 'string', 'max:60'],
+            'descricao' => ['required', 'string', 'max:120'],
+            'ncm' => ['required', 'digits:8'],
+            'valor_unitario' => ['required', 'numeric', 'min:0'],
+            'cfop' => ['nullable', 'digits:4'],
+            'csosn' => ['nullable', 'string', 'max:4'],
+            'cst' => ['nullable', 'string', 'max:3'],
+            'unidade' => ['required', 'string', 'max:6'],
+            'ativo' => ['sometimes', 'boolean'],
+        ]);
+
+        $data['ativo'] = $data['ativo'] ?? true;
+        $data['id_empresa'] = $request->user()->id_empresa;
+
+        $produto = Produto::create($data);
+
+        return response()->json([
+            'message' => 'Produto cadastrado com sucesso.',
+            'produto' => $produto,
+        ], 201);
+    }
+
+    public function produtosEditar(Request $request, Produto $produto): JsonResponse
+    {
+        $data = $request->validate([
+            'codigo' => ['required', 'string', 'max:60'],
+            'descricao' => ['required', 'string', 'max:120'],
+            'ncm' => ['required', 'digits:8'],
+            'valor_unitario' => ['required', 'numeric', 'min:0'],
+            'cfop' => ['nullable', 'digits:4'],
+            'csosn' => ['nullable', 'string', 'max:4'],
+            'cst' => ['nullable', 'string', 'max:3'],
+            'unidade' => ['required', 'string', 'max:6'],
+            'ativo' => ['sometimes', 'boolean'],
+        ]);
+
+        $produto->update($data);
+
+        return response()->json([
+            'message' => 'Produto atualizado com sucesso.',
+            'produto' => $produto,
+        ]);
+    }
+
+    public function produtosExcluir(Produto $produto): JsonResponse
+    {
+        $produto->delete();
+
+        return response()->json([
+            'message' => 'Produto excluído com sucesso.',
+        ]);
     }
 }

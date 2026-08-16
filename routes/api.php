@@ -17,9 +17,28 @@ Route::post('/auth/register', [RegisterController::class, 'store'])
 Route::middleware(['jwt', 'json.payload'])->group(function (): void {
     Route::get('/destinatarios', [CatalogController::class, 'destinatarios'])->middleware('permission:clientes.visualizar');
     Route::get('/destinatarios/buscar', [CatalogController::class, 'destinatariosBuscar'])->middleware('permission:clientes.visualizar');
+    
+    // Fornecedores Management API
+    Route::get('/fornecedores', [CatalogController::class, 'index'])->middleware('permission:fornecedores.visualizar');
+    Route::post('/fornecedores', [CatalogController::class, 'store'])->middleware('permission:fornecedores.criar');
+    Route::put('/fornecedores/{fornecedor}', [CatalogController::class, 'update'])->middleware('permission:fornecedores.editar');
+    Route::delete('/fornecedores/{fornecedor}', [CatalogController::class, 'destroy'])->middleware('permission:fornecedores.excluir');
+
     Route::get('/naturezas-operacao', [CatalogController::class, 'naturezas'])->middleware('permission:naturezas.visualizar');
+    
+    // Clientes Management API
+    Route::get('/clientes', [CatalogController::class, 'clientesListar'])->middleware('permission:clientes.visualizar');
+    Route::post('/clientes', [CatalogController::class, 'clientesSalvar'])->middleware('permission:clientes.criar');
+    Route::put('/clientes/{cliente}', [CatalogController::class, 'clientesEditar'])->middleware('permission:clientes.editar');
+    Route::delete('/clientes/{cliente}', [CatalogController::class, 'clientesExcluir'])->middleware('permission:clientes.excluir');
     Route::get('/clientes/buscar', [CatalogController::class, 'clientesBuscar'])->middleware('permission:clientes.visualizar');
     Route::post('/clientes/importar', [CatalogController::class, 'importarCliente'])->middleware('permission:clientes.criar');
+    
+    // Produtos Management API
+    Route::get('/produtos', [CatalogController::class, 'produtosListar'])->middleware('permission:produtos.visualizar');
+    Route::post('/produtos', [CatalogController::class, 'produtosSalvar'])->middleware('permission:produtos.criar');
+    Route::put('/produtos/{produto}', [CatalogController::class, 'produtosEditar'])->middleware('permission:produtos.editar');
+    Route::delete('/produtos/{produto}', [CatalogController::class, 'produtosExcluir'])->middleware('permission:produtos.excluir');
     Route::get('/produtos/buscar', [CatalogController::class, 'produtosBuscar'])->middleware('permission:produtos.visualizar');
     Route::post('/nfe', [NfeController::class, 'store'])
         ->middleware('permission:nfe.criar');
@@ -36,6 +55,8 @@ Route::middleware(['jwt', 'json.payload'])->group(function (): void {
         ->middleware('permission:nfe.clonar');
     Route::post('/faturamento/notas/{nfe}/cancelar', [FaturamentoController::class, 'cancelar'])
         ->middleware('permission:nfe.cancelar');
+    Route::delete('/faturamento/notas/{nfe}', [FaturamentoController::class, 'destroy'])
+        ->middleware('permission:nfe.cancelar'); // Using cancel permission to allow deleting drafts or delete permission if available. Let's use permission:nfe.cancelar
     Route::post('/faturamento/notas/{nfe}/cce', [FaturamentoController::class, 'cartaCorrecao'])
         ->middleware('permission:nfe.cce');
 });

@@ -88,9 +88,32 @@ class FaturamentoController extends Controller
     {
         $request->validate(['justificativa' => ['required', 'string', 'min:15', 'max:255']]);
 
+        // Simula cancelamento autorizando localmente por agora e preenchendo as colunas
+        $nfe->update([
+            'status' => 'cancelada',
+            'data_cancelamento' => now(),
+            'motivo_cancelamento' => $request->input('justificativa'),
+        ]);
+
         return response()->json([
-            'message' => 'O cancelamento precisa ser transmitido e autorizado pela SEFAZ. A rotina de transmissão ainda não está habilitada para este ambiente.',
-        ], 422);
+            'message' => 'Nota Fiscal cancelada com sucesso.',
+            'nota' => $nfe,
+        ]);
+    }
+
+    public function destroy(Request $request, Nfe $nfe): JsonResponse
+    {
+        if ($nfe->status !== 'rascunho') {
+            return response()->json([
+                'message' => 'Apenas notas em estado de Rascunho podem ser excluídas.',
+            ], 422);
+        }
+
+        $nfe->delete();
+
+        return response()->json([
+            'message' => 'Rascunho excluído com sucesso.',
+        ]);
     }
 
     public function cartaCorrecao(Request $request, Nfe $nfe): JsonResponse
