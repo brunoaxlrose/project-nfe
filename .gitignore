@@ -1,0 +1,10 @@
+/vendor/
+/storage/*.key
+/storage/app/nfe/
+/secrets/
+*.pfx
+*.p12
+*.pem
+.env
+.env.*
+!.env.example

@@ -1,0 +1,21 @@
+{
+  "name": "empresa/emissor-nfe",
+  "type": "project",
+  "require": {
+    "php": "^8.3",
+    "laravel/framework": "^13.0",
+    "nfephp-org/sped-nfe": "^5.0",
+    "nfephp-org/sped-da": "^1.1.6",
+    "firebase/php-jwt": "^7.1"
+  },
+  "autoload": {
+    "psr-4": {"App\\": "app/"},
+    "classmap": ["database/seeders"],
+    "files": []
+  },
+  "scripts": {
+    "post-autoload-dump": ["@php artisan package:discover --ansi"]
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

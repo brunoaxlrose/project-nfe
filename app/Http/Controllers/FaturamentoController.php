@@ -1,0 +1,184 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Nfe;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+
+class FaturamentoController extends Controller
+{
+    public function index(Request $request)
+    {
+        $request->merge([
+            'documento' => preg_replace('/\D+/', '', (string) $request->input('documento', '')),
+        ]);
+
+        $filters = $request->validate([
+            'data_inicio' => ['nullable', 'date'], 'data_fim' => ['nullable', 'date', 'after_or_equal:data_inicio'],
+            'status' => ['nullable', 'in:rascunho,gerando,assinado,aguardando_retorno,autorizada,simulada,rejeitada,cancelada,erro'],
+            'documento' => ['nullable', 'digits_between:11,14'], 'busca' => ['nullable', 'string', 'max:120'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+        $query = Nfe::query()
+            ->with([
+                'cliente:id,razao_social',
+                'destinatario:id,nome_razao_social',
+                'naturezaOperacao:id,nome,tipo_movimento,cfop_padrao,csosn_padrao',
+            ])
+            ->select(['id','numero','serie','chave_acesso','status','protocolo','cstat','xmotivo','destinatario_documento','usuario_id','cliente_id','destinatario_id','natureza_operacao_id','created_at','danfe_path','payload']);
+        if (!empty($filters['data_inicio'])) $query->whereDate('created_at', '>=', $filters['data_inicio']);
+        if (!empty($filters['data_fim'])) $query->whereDate('created_at', '<=', $filters['data_fim']);
+        if (!empty($filters['status'])) $query->where('status', $filters['status']);
+        if (!empty($filters['documento'])) $query->where('destinatario_documento', preg_replace('/\D+/', '', $filters['documento']));
+        if (!empty($filters['busca'])) {
+            $term = trim($filters['busca']);
+            $digits = preg_replace('/\D+/', '', $term);
+            $query->where(function ($search) use ($term, $digits): void {
+                $search->whereRaw('CAST(numero AS TEXT) ILIKE ?', ['%'.$term.'%'])
+                    ->orWhere('destinatario_documento', 'like', '%'.($digits ?: $term).'%')
+                    ->orWhereHas('cliente', fn ($relation) => $relation->where('razao_social', 'ilike', '%'.$term.'%'))
+                    ->orWhereHas('destinatario', fn ($relation) => $relation->where('nome_razao_social', 'ilike', '%'.$term.'%'));
+            });
+        }
+
+        $paginated = $query->latest('id')->paginate($filters['per_page'] ?? 20)->withQueryString();
+        $paginated->getCollection()->transform(function (Nfe $nota): array {
+            return [
+                ...$nota->toArray(),
+                'destinatario_nome' => $nota->cliente?->razao_social ?: $nota->destinatario?->nome_razao_social,
+                'valor_total' => $nota->valor_total,
+            ];
+        });
+
+        return response()->json($paginated);
+    }
+
+    public function clone(Request $request, Nfe $nfe): JsonResponse
+    {
+        $draft = DB::transaction(function () use ($request, $nfe): Nfe {
+            $numero = ((int) Nfe::query()->where('serie', $nfe->serie)->max('numero')) + 1;
+
+            return Nfe::create([
+                'numero' => $numero,
+                'serie' => $nfe->serie,
+                'status' => 'rascunho',
+                'payload' => $nfe->payload ?? [],
+                'usuario_id' => $request->user()->id,
+                'cliente_id' => $nfe->cliente_id,
+                'destinatario_id' => $nfe->destinatario_id,
+                'natureza_operacao_id' => $nfe->natureza_operacao_id,
+                'destinatario_documento' => $nfe->destinatario_documento,
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Rascunho criado a partir da nota selecionada.',
+            'id' => $draft->id,
+            'numero' => $draft->numero,
+            'payload' => $draft->payload,
+        ], 201);
+    }
+
+    public function cancelar(Request $request, Nfe $nfe): JsonResponse
+    {
+        $request->validate(['justificativa' => ['required', 'string', 'min:15', 'max:255']]);
+
+        return response()->json([
+            'message' => 'O cancelamento precisa ser transmitido e autorizado pela SEFAZ. A rotina de transmissão ainda não está habilitada para este ambiente.',
+        ], 422);
+    }
+
+    public function cartaCorrecao(Request $request, Nfe $nfe): JsonResponse
+    {
+        $request->validate(['justificativa' => ['required', 'string', 'min:15', 'max:1000']]);
+
+        return response()->json([
+            'message' => 'A Carta de Correção precisa ser transmitida e autorizada pela SEFAZ. A rotina de transmissão ainda não está habilitada para este ambiente.',
+        ], 422);
+    }
+
+    public function download(Request $request, Nfe $nfe): BinaryFileResponse|\Illuminate\Http\Response|JsonResponse
+    {
+        $tipo = $request->query('tipo', 'zip');
+        if (!in_array($tipo, ['xml', 'pdf', 'zip'], true)) {
+            return response()->json(['message' => 'Selecione um tipo de arquivo válido para download.'], 422);
+        }
+
+        try {
+            $files = [];
+
+            if ($tipo !== 'pdf' && $nfe->xml) {
+                $xmlName = $nfe->chave_acesso
+                    ? $nfe->chave_acesso.'-procNFe.xml'
+                    : $nfe->id.'-nfe.xml';
+                $xmlPath = 'nfe/'.$xmlName;
+
+                if (!Storage::disk('local')->exists($xmlPath)) {
+                    Storage::disk('local')->put($xmlPath, $nfe->xml);
+                }
+
+                $files['xml'] = $xmlPath;
+            }
+
+            if ($tipo !== 'xml' && $nfe->danfe_path && Storage::disk('local')->exists($nfe->danfe_path)) {
+                $files['pdf'] = $nfe->danfe_path;
+            }
+
+            if ($tipo === 'xml' && !isset($files['xml'])) {
+                return response()->json(['message' => 'O XML desta nota ainda não está disponível para download.'], 404);
+            }
+
+            if ($tipo === 'pdf' && !isset($files['pdf'])) {
+                return response()->json(['message' => 'O DANFE desta nota ainda não está disponível para download.'], 404);
+            }
+
+            if ($tipo === 'zip' && !$files) {
+                return response()->json(['message' => 'Os documentos desta nota ainda não estão disponíveis para download.'], 404);
+            }
+
+            if ($tipo === 'xml') {
+                return response()->download(
+                    Storage::disk('local')->path($files['xml']),
+                    'nfe-'.$nfe->id.'.xml',
+                    ['Content-Type' => 'application/xml'],
+                );
+            }
+
+            if ($tipo === 'pdf') {
+                return response()->download(
+                    Storage::disk('local')->path($files['pdf']),
+                    'danfe-'.$nfe->id.'.pdf',
+                    ['Content-Type' => 'application/pdf'],
+                );
+            }
+
+            $zipPath = storage_path('app/nfe/'.$nfe->id.'-documentos.zip');
+            $zip = new \ZipArchive();
+
+            if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+                return response()->json(['message' => 'Não foi possível preparar os documentos para download.'], 500);
+            }
+
+            foreach ($files as $extension => $path) {
+                $zip->addFile(Storage::disk('local')->path($path), 'nfe-'.$nfe->id.'.'.$extension);
+            }
+
+            $zip->close();
+
+            return response()->download($zipPath, 'nfe-'.$nfe->id.'-documentos.zip')->deleteFileAfterSend(true);
+        } catch (\Throwable $exception) {
+            Log::error('Falha técnica ao preparar download da NF-e.', [
+                'exception' => $exception,
+                'nfe_id' => $nfe->id,
+                'usuario_id' => $request->user()?->id,
+            ]);
+
+            return response()->json(['message' => 'Não foi possível preparar o arquivo para download. Tente novamente.'], 500);
+        }
+    }
+}

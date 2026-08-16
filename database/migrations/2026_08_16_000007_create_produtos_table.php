@@ -1,0 +1,3 @@
+<?php
+use Illuminate\Database\Migrations\Migration; use Illuminate\Database\Schema\Blueprint; use Illuminate\Support\Facades\Schema;
+return new class extends Migration { public function up(): void { Schema::create('produtos', function (Blueprint $table): void { $table->id(); $table->string('codigo',40)->unique(); $table->string('descricao',120); $table->string('ncm',8); $table->decimal('valor_unitario',15,4)->default(0); $table->string('cfop',4)->nullable(); $table->string('csosn',4)->nullable(); $table->string('cst',3)->nullable(); $table->string('unidade',6)->default('UN'); $table->boolean('ativo')->default(true); $table->timestamps(); $table->index(['ativo','descricao']); }); } public function down(): void { Schema::dropIfExists('produtos'); } };

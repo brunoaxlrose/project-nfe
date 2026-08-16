@@ -1,0 +1,6 @@
+.git
+.env
+secrets
+storage/app/nfe
+vendor
+node_modules

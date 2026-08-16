@@ -1,0 +1,51 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-nfe}
+      DB_USERNAME: ${DB_USERNAME:-nfe}
+      DB_PASSWORD: ${DB_PASSWORD:-change-me-before-production}
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_SECRET_FILE: ${JWT_SECRET_FILE:-}
+    volumes:
+      # Monte somente a pasta local que contém o A1. Ela não entra na imagem.
+      - ${NFE_CERTIFICATE_DIR:-./secrets/certificates}:/run/secrets/nfe:ro
+      - nfe_documents:/var/www/html/storage/app/nfe
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${DB_EXTERNAL_PORT:-5433}:5432"
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-nfe}
+      POSTGRES_USER: ${DB_USERNAME:-nfe}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me-before-production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-nfe} -d ${DB_DATABASE:-nfe}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+  nfe_documents:

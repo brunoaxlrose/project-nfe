@@ -1,0 +1,3 @@
+@props(['status'])
+@php($style = match(strtolower((string)$status)) { 'autorizada','authorized' => 'bg-emerald-50 text-emerald-700 ring-emerald-600/20', 'rejeitada','erro','cancelada' => 'bg-red-50 text-red-700 ring-red-600/20', 'processando','gerando','assinado','aguardando_retorno' => 'bg-amber-50 text-amber-700 ring-amber-600/20', default => 'bg-slate-100 text-slate-600 ring-slate-500/20' })
+<span {{ $attributes->merge(['class'=>'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset '.$style]) }}><span class="h-1.5 w-1.5 rounded-full bg-current"></span>{{ ucfirst(str_replace('_', ' ', $status)) }}</span>
