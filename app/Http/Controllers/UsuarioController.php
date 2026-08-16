@@ -12,6 +12,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class UsuarioController extends Controller
 {
@@ -89,6 +92,7 @@ class UsuarioController extends Controller
     {
         $perfis = Perfil::query()
             ->with('permissoes:id_permissao,nome,slug,categoria')
+            ->withCount('usuarios')
             ->orderBy('nome')
             ->get();
         $permissoes = Permissao::query()
@@ -105,6 +109,97 @@ class UsuarioController extends Controller
         ]);
     }
 
+    public function storePerfil(Request $request): JsonResponse
+    {
+        $data = $this->validarPerfil($request);
+
+        $perfil = Perfil::query()->create([
+            'id_empresa' => (int) $request->user()->id_empresa,
+            'nome' => $data['nome'],
+            'slug' => $this->slugPerfil($data['nome']),
+        ]);
+
+        return response()->json([
+            'message' => 'Perfil cadastrado com sucesso.',
+            'perfil' => $perfil->fresh(['permissoes'])->loadCount('usuarios'),
+        ], 201);
+    }
+
+    public function updatePerfil(Request $request, Perfil $perfil): JsonResponse
+    {
+        $data = $this->validarPerfil($request, $perfil);
+
+        $perfil->fill([
+            'nome' => $data['nome'],
+            'slug' => $this->slugPerfil($data['nome']),
+        ])->save();
+
+        return response()->json([
+            'message' => 'Perfil atualizado com sucesso.',
+            'perfil' => $perfil->fresh(['permissoes'])->loadCount('usuarios'),
+        ]);
+    }
+
+    public function destroyPerfil(Perfil $perfil): JsonResponse
+    {
+        if ($perfil->usuarios()->exists()) {
+            throw ValidationException::withMessages([
+                'perfil' => 'Este perfil possui usuários vinculados e não pode ser excluído.',
+            ]);
+        }
+
+        $perfil->delete();
+
+        return response()->json([
+            'message' => 'Perfil excluído com sucesso.',
+        ]);
+    }
+
+    public function adicionarUsuarioPerfil(Request $request, Perfil $perfil): JsonResponse
+    {
+        $empresaId = (int) $request->user()->id_empresa;
+        $data = $request->validate([
+            'id_usuario' => [
+                'required',
+                'integer',
+                Rule::exists('usuario', 'id_usuario')->where('id_empresa', $empresaId),
+            ],
+        ], [
+            'id_usuario.required' => 'Selecione um usuário para adicionar ao perfil.',
+            'id_usuario.exists' => 'O usuário selecionado não pertence à sua empresa.',
+        ]);
+
+        $usuario = Usuario::query()->findOrFail($data['id_usuario']);
+        $usuario->fill([
+            'id_perfil' => $perfil->id_perfil,
+            'perfil' => $perfil->nome,
+        ])->save();
+
+        return response()->json([
+            'message' => 'Usuário adicionado ao perfil com sucesso.',
+            'usuario' => $this->usuarioPayload($usuario->fresh(['perfilAcesso', 'permissoesDiretas'])),
+        ]);
+    }
+
+    public function removerUsuarioPerfil(Perfil $perfil, Usuario $usuario): JsonResponse
+    {
+        if ((int) $usuario->id_perfil !== (int) $perfil->id_perfil) {
+            throw ValidationException::withMessages([
+                'usuario' => 'Este usuário não está vinculado ao perfil selecionado.',
+            ]);
+        }
+
+        $usuario->fill([
+            'id_perfil' => null,
+            'perfil' => 'Sem perfil',
+        ])->save();
+
+        return response()->json([
+            'message' => 'Usuário removido do perfil com sucesso.',
+            'usuario' => $this->usuarioPayload($usuario->fresh(['perfilAcesso', 'permissoesDiretas'])),
+        ]);
+    }
+
     public function atualizarPermissoes(UpdatePerfilPermissoesRequest $request, Perfil $perfil): JsonResponse
     {
         $data = $request->validated();
@@ -115,6 +210,34 @@ class UsuarioController extends Controller
             'message' => 'Permissões do perfil atualizadas com sucesso.',
             'perfil' => $perfil->fresh('permissoes'),
         ]);
+    }
+
+    private function validarPerfil(Request $request, ?Perfil $perfil = null): array
+    {
+        $empresaId = (int) $request->user()->id_empresa;
+        $slug = $this->slugPerfil((string) $request->input('nome'));
+
+        $request->merge(['slug' => $slug]);
+
+        return $request->validate([
+            'nome' => ['required', 'string', 'min:2', 'max:80'],
+            'slug' => [
+                'required',
+                'string',
+                Rule::unique('perfil', 'slug')
+                    ->where('id_empresa', $empresaId)
+                    ->ignore($perfil?->id_perfil, 'id_perfil'),
+            ],
+        ], [
+            'nome.required' => 'Informe o nome do perfil.',
+            'nome.min' => 'O nome do perfil deve ter pelo menos 2 caracteres.',
+            'slug.unique' => 'Já existe um perfil com este nome.',
+        ]);
+    }
+
+    private function slugPerfil(string $nome): string
+    {
+        return Str::slug($nome);
     }
 
     private function usuarioPayload(Usuario $usuario): array

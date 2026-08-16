@@ -6,7 +6,10 @@
                 <h1 class="text-2xl font-bold tracking-tight text-slate-950">Usuários e permissões</h1>
                 <p class="mt-2 text-sm text-slate-500">Gerencie quem acessa a empresa e quais ações cada perfil pode executar.</p>
             </div>
-            <button type="button" @click="abrirNovoUsuario" class="bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">Novo usuário</button>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button type="button" @click="abrirGerenciarPerfis" class="border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Gerenciar Perfil</button>
+                <button type="button" @click="abrirNovoUsuario" class="bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">Novo usuário</button>
+            </div>
         </div>
 
         <div class="space-y-6">
@@ -56,44 +59,6 @@
                 </div>
             </section>
 
-            <section class="border border-slate-200 bg-white p-5 shadow-sm">
-                <div class="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                    <div>
-                        <h2 class="text-sm font-semibold text-slate-900">Permissões por perfil</h2>
-                        <p class="mt-1 text-xs text-slate-500">Ajuste o acesso padrão de Administrador, Operador, Faturamento ou outros perfis do tenant.</p>
-                    </div>
-                    <label class="w-full lg:w-80">
-                        <span class="label">Perfil</span>
-                        <select x-model.number="perfilSelecionadoId" @change="carregarPermissoesPerfil" class="field">
-                            <option value="">Selecione</option>
-                            <template x-for="perfil in perfis" :key="perfil.id">
-                                <option :value="perfil.id" x-text="perfil.nome"></option>
-                            </template>
-                        </select>
-                    </label>
-                </div>
-                <div class="grid max-h-[380px] gap-4 overflow-y-auto pr-1 lg:grid-cols-2 2xl:grid-cols-3">
-                    <template x-for="grupo in permissoes" :key="grupo[0]?.categoria">
-                        <div class="border border-slate-100 p-4">
-                            <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500" x-text="grupo[0]?.categoria"></p>
-                            <div class="space-y-2">
-                                <template x-for="permissao in grupo" :key="permissao.id">
-                                    <label class="flex items-start gap-2 text-sm text-slate-700">
-                                        <input type="checkbox" class="mt-1 h-4 w-4 accent-blue-600" :value="permissao.id" x-model="permissoesSelecionadas">
-                                        <span>
-                                            <span class="block font-medium" x-text="permissao.nome"></span>
-                                            <span class="block text-xs text-slate-500" x-text="permissao.slug"></span>
-                                        </span>
-                                    </label>
-                                </template>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-                <div class="mt-5 flex justify-end border-t border-slate-100 pt-4">
-                    <button type="button" @click="salvarPermissoes" :disabled="!perfilSelecionadoId || salvandoPermissoes" class="bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50" x-text="salvandoPermissoes ? 'Salvando...' : 'Salvar permissões do perfil'"></button>
-                </div>
-            </section>
         </div>
 
         <div x-cloak x-show="modalUsuarioAberto" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6">
@@ -214,6 +179,139 @@
                 </form>
             </div>
         </div>
+
+        <div x-cloak x-show="modalPerfilAberto" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6">
+            <div @click.outside="fecharModalPerfil" class="flex h-[88vh] w-full max-w-5xl flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl">
+                <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Perfis</p>
+                        <h2 class="mt-1 text-xl font-bold text-slate-950">Gerenciar Perfil</h2>
+                        <p class="mt-1 text-sm text-slate-500">Crie, renomeie ou remova perfis de acesso do tenant.</p>
+                    </div>
+                    <button type="button" @click="fecharModalPerfil" class="px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100">Fechar</button>
+                </div>
+
+                <div class="grid min-h-0 flex-1 gap-0 overflow-hidden lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+                    <div class="min-h-0 overflow-y-auto border-b border-slate-200 lg:border-b-0 lg:border-r">
+                        <div class="border-b border-slate-100 px-5 py-3">
+                            <p class="text-sm font-semibold text-slate-900">Perfis cadastrados</p>
+                            <p class="mt-1 text-xs text-slate-500">Perfis com usuários vinculados não podem ser excluídos.</p>
+                        </div>
+                        <div class="divide-y divide-slate-100">
+                            <template x-for="perfil in perfis" :key="'modal-perfil-' + perfil.id">
+                                <div class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <p class="font-semibold text-slate-900" x-text="perfil.nome"></p>
+                                        <p class="mt-1 text-xs text-slate-500">
+                                            <span x-text="perfil.slug"></span>
+                                            <span> · </span>
+                                            <span x-text="(perfil.usuarios_count || 0) + ' usuário(s)'"></span>
+                                        </p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" @click="editarPerfil(perfil)" class="inline-flex h-9 w-9 items-center justify-center border border-slate-200 text-blue-700 hover:bg-blue-50" title="Editar perfil" aria-label="Editar perfil">
+                                            <x-icon name="edit" class="h-4 w-4" />
+                                        </button>
+                                        <button type="button" @click="excluirPerfil(perfil)" :disabled="perfilEmUso(perfil) || salvandoPerfil" class="inline-flex h-9 w-9 items-center justify-center border border-slate-200 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-white" title="Excluir perfil" aria-label="Excluir perfil">
+                                            <x-icon name="trash" class="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="!perfis.length" x-cloak class="px-5 py-8 text-center text-sm text-slate-500">Nenhum perfil cadastrado.</div>
+                        </div>
+                    </div>
+
+                    <form @submit.prevent="salvarPerfil" class="flex min-h-0 flex-col bg-slate-50">
+                        <div class="min-h-0 flex-1 overflow-y-auto">
+                            <div class="border-b border-slate-200 p-5">
+                                <p class="text-sm font-semibold text-slate-900" x-text="perfilForm.id ? 'Editar perfil' : 'Novo perfil'"></p>
+                                <label class="mt-4 block">
+                                    <span class="label">Nome do perfil</span>
+                                    <input x-model="perfilForm.nome" class="field bg-white" required maxlength="80" placeholder="Ex: Financeiro">
+                                </label>
+                                <p class="mt-2 text-xs text-slate-500">Crie ou selecione um perfil para editar as permissões padrão.</p>
+                                <p x-show="mensagemPerfil" x-cloak class="mt-4 border px-3 py-2 text-sm" :class="erroPerfil ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'" x-text="mensagemPerfil"></p>
+                            </div>
+
+                            <div x-show="perfilForm.id" x-cloak class="border-b border-slate-200 bg-white p-5">
+                                <div class="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                                    <div>
+                                        <p class="text-sm font-semibold text-slate-900">Usuários do perfil</p>
+                                        <p class="mt-1 text-xs text-slate-500">Adicione usuários existentes a este grupo ou remova o vínculo.</p>
+                                    </div>
+                                    <div class="grid w-full gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:w-[430px]">
+                                        <select x-model.number="usuarioPerfilFormId" class="field bg-white">
+                                            <option value="">Adicionar usuário</option>
+                                            <template x-for="usuario in usuariosDisponiveisPerfil()" :key="'perfil-disponivel-' + usuario.id">
+                                                <option :value="usuario.id" x-text="usuario.nome + ' - ' + usuario.email"></option>
+                                            </template>
+                                        </select>
+                                        <button type="button" @click="adicionarUsuarioPerfil" :disabled="!usuarioPerfilFormId || salvandoPerfilUsuario" class="inline-flex h-[46px] items-center justify-center gap-2 bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                                            <x-icon name="user-plus" class="h-4 w-4" />
+                                            Adicionar
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="divide-y divide-slate-100 border border-slate-100">
+                                    <template x-for="usuario in usuariosDoPerfil()" :key="'perfil-usuario-' + usuario.id">
+                                        <div class="flex items-center justify-between gap-3 px-4 py-3">
+                                            <div class="min-w-0">
+                                                <p class="truncate text-sm font-semibold text-slate-900" x-text="usuario.nome"></p>
+                                                <p class="truncate text-xs text-slate-500" x-text="usuario.email"></p>
+                                            </div>
+                                            <button type="button" @click="removerUsuarioPerfil(usuario)" :disabled="salvandoPerfilUsuario" class="inline-flex h-9 w-9 shrink-0 items-center justify-center border border-slate-200 text-red-600 hover:bg-red-50 disabled:opacity-50" title="Remover do perfil" aria-label="Remover do perfil">
+                                                <x-icon name="user-minus" class="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </template>
+                                    <div x-show="!usuariosDoPerfil().length" x-cloak class="px-4 py-5 text-sm text-slate-500">Nenhum usuário vinculado a este perfil.</div>
+                                </div>
+                            </div>
+
+                            <div x-show="perfilForm.id" x-cloak class="bg-white p-5">
+                                <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <p class="text-sm font-semibold text-slate-900">Permissões do perfil</p>
+                                        <p class="mt-1 text-xs text-slate-500">Marque as ações liberadas por padrão para este perfil.</p>
+                                    </div>
+                                    <button type="button" @click="salvarPermissoes" :disabled="!perfilSelecionadoId || salvandoPermissoes" class="bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50" x-text="salvandoPermissoes ? 'Salvando...' : 'Salvar permissões'"></button>
+                                </div>
+                                <div class="grid gap-4 xl:grid-cols-2">
+                                    <template x-for="grupo in permissoes" :key="'modal-permissoes-' + grupo[0]?.categoria">
+                                        <div class="border border-slate-100 p-4">
+                                            <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500" x-text="grupo[0]?.categoria"></p>
+                                            <div class="space-y-2">
+                                                <template x-for="permissao in grupo" :key="'modal-permissao-' + permissao.id">
+                                                    <label class="flex items-start gap-2 text-sm text-slate-700">
+                                                        <input type="checkbox" class="mt-1 h-4 w-4 accent-blue-600" :value="permissao.id" x-model="permissoesSelecionadas">
+                                                        <span>
+                                                            <span class="block font-medium" x-text="permissao.nome"></span>
+                                                            <span class="block text-xs text-slate-500" x-text="permissao.slug"></span>
+                                                        </span>
+                                                    </label>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <div x-show="!perfilForm.id" x-cloak class="border-t border-slate-200 bg-white p-5 text-sm text-slate-500">
+                                Salve o perfil para liberar usuários e permissões.
+                            </div>
+                        </div>
+
+                        <div class="shrink-0 border-t border-slate-200 bg-white p-5">
+                            <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                                <button type="button" x-show="perfilForm.id" x-cloak @click="cancelarEdicaoPerfil" class="border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar edição</button>
+                                <button type="submit" :disabled="salvandoPerfil" class="bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50" x-text="salvandoPerfil ? 'Salvando...' : (perfilForm.id ? 'Salvar alterações' : 'Criar perfil')"></button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -234,12 +332,19 @@
                     ],
                     step: 1,
                     modalUsuarioAberto: false,
+                    modalPerfilAberto: false,
                     isLoading: false,
                     salvandoUsuario: false,
+                    salvandoPerfil: false,
+                    salvandoPerfilUsuario: false,
                     salvandoPermissoes: false,
                     mensagem: '',
+                    mensagemPerfil: '',
                     erro: false,
+                    erroPerfil: false,
                     form: { id: null, nome: '', email: '', id_perfil: '', ativo: true, permissoes_especificas: [], password: '', password_confirmation: '' },
+                    perfilForm: { id: null, nome: '' },
+                    usuarioPerfilFormId: '',
                     init() { this.carregarTudo(); },
                     headers() { return { Authorization: 'Bearer ' + localStorage.getItem('nfe_token'), Accept: 'application/json', 'Content-Type': 'application/json' }; },
                     async parse(response) { const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.message || 'Não foi possível concluir a operação.'); return data; },
@@ -276,6 +381,45 @@
                         this.modalUsuarioAberto = false;
                         this.limparForm();
                     },
+                    abrirGerenciarPerfis() {
+                        this.limparPerfilForm();
+                        this.modalPerfilAberto = true;
+                    },
+                    fecharModalPerfil() {
+                        if (this.salvandoPerfil) return;
+                        this.modalPerfilAberto = false;
+                        this.limparPerfilForm();
+                    },
+                    limparPerfilForm() {
+                        this.perfilForm = { id: null, nome: '' };
+                        this.perfilSelecionadoId = '';
+                        this.permissoesSelecionadas = [];
+                        this.usuarioPerfilFormId = '';
+                        this.mensagemPerfil = '';
+                        this.erroPerfil = false;
+                    },
+                    editarPerfil(perfil) {
+                        this.perfilForm = { id: perfil.id, nome: perfil.nome };
+                        this.perfilSelecionadoId = perfil.id;
+                        this.usuarioPerfilFormId = '';
+                        this.carregarPermissoesPerfil();
+                        this.mensagemPerfil = '';
+                        this.erroPerfil = false;
+                    },
+                    cancelarEdicaoPerfil() {
+                        this.limparPerfilForm();
+                    },
+                    perfilEmUso(perfil) {
+                        return Number(perfil.usuarios_count || 0) > 0;
+                    },
+                    usuariosDoPerfil() {
+                        if (!this.perfilForm.id) return [];
+                        return this.usuarios.filter((usuario) => Number(usuario.perfil?.id) === Number(this.perfilForm.id));
+                    },
+                    usuariosDisponiveisPerfil() {
+                        if (!this.perfilForm.id) return [];
+                        return this.usuarios.filter((usuario) => Number(usuario.perfil?.id) !== Number(this.perfilForm.id));
+                    },
                     editarUsuario(usuario) {
                         this.form = {
                             id: usuario.id,
@@ -293,16 +437,69 @@
                         this.modalUsuarioAberto = true;
                     },
                     avancarStep() {
+                        if (!this.validarStepAtual()) return;
                         if (this.step < 4) this.step += 1;
                     },
                     voltarStep() {
                         if (this.step > 1) this.step -= 1;
+                    },
+                    validarEmail(email) {
+                        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
+                    },
+                    validarSenha(password) {
+                        return /[a-z]/.test(password)
+                            && /[A-Z]/.test(password)
+                            && /\d/.test(password)
+                            && /[^A-Za-z0-9]/.test(password)
+                            && String(password || '').length >= 8;
+                    },
+                    validarStepAtual() {
+                        if (this.step === 1) {
+                            if (!String(this.form.nome || '').trim() || String(this.form.nome || '').trim().length < 2) {
+                                window.fiscalToast?.('warning', 'Informe o nome completo do usuário antes de continuar.', 'Nome obrigatório');
+                                return false;
+                            }
+                            if (!this.validarEmail(this.form.email)) {
+                                window.fiscalToast?.('warning', 'Informe um e-mail válido antes de continuar.', 'E-mail obrigatório');
+                                return false;
+                            }
+                        }
+
+                        if (this.step === 2 && !this.form.id_perfil) {
+                            window.fiscalToast?.('warning', 'Selecione o perfil de acesso do usuário antes de continuar.', 'Perfil obrigatório');
+                            return false;
+                        }
+
+                        if (this.step === 4) {
+                            const password = String(this.form.password || '');
+                            const confirmation = String(this.form.password_confirmation || '');
+
+                            if (!this.form.id && !password) {
+                                window.fiscalToast?.('warning', 'Informe uma senha temporária para o novo usuário.', 'Senha obrigatória');
+                                return false;
+                            }
+
+                            if (password || confirmation) {
+                                if (!this.validarSenha(password)) {
+                                    window.fiscalToast?.('warning', 'Use no mínimo 8 caracteres, com maiúscula, minúscula, número e símbolo.', 'Senha fraca');
+                                    return false;
+                                }
+                                if (password !== confirmation) {
+                                    window.fiscalToast?.('warning', 'A confirmação da senha não confere.', 'Senha divergente');
+                                    return false;
+                                }
+                            }
+                        }
+
+                        return true;
                     },
                     perfilSelecionadoNome() {
                         const perfil = this.perfis.find((item) => Number(item.id) === Number(this.form.id_perfil));
                         return perfil?.nome || 'Não selecionado';
                     },
                     async salvarUsuario() {
+                        if (!this.validarStepAtual()) return;
+
                         this.salvandoUsuario = true;
                         this.mensagem = '';
                         try {
@@ -320,6 +517,113 @@
                             this.mensagem = error.message;
                         } finally {
                             this.salvandoUsuario = false;
+                        }
+                    },
+                    async salvarPerfil() {
+                        this.salvandoPerfil = true;
+                        this.mensagemPerfil = '';
+                        try {
+                            const url = this.perfilForm.id ? '/api/perfis/' + this.perfilForm.id : '/api/perfis';
+                            const method = this.perfilForm.id ? 'PUT' : 'POST';
+                            const response = await fiscalFetch(url, {
+                                method,
+                                headers: this.headers(),
+                                body: JSON.stringify({ nome: this.perfilForm.nome }),
+                            });
+                            const data = await this.parse(response);
+                            this.erroPerfil = false;
+                            this.mensagemPerfil = data.message;
+                            window.fiscalToast?.('success', data.message, 'Perfis');
+                            const perfilSalvoId = data.perfil?.id || data.perfil?.id_perfil || this.perfilForm.id;
+                            this.limparPerfilForm();
+                            await this.carregarTudo();
+                            const perfilSalvo = this.perfis.find((item) => Number(item.id) === Number(perfilSalvoId));
+                            if (perfilSalvo) {
+                                this.editarPerfil(perfilSalvo);
+                            }
+                        } catch (error) {
+                            this.erroPerfil = true;
+                            this.mensagemPerfil = error.message;
+                        } finally {
+                            this.salvandoPerfil = false;
+                        }
+                    },
+                    async excluirPerfil(perfil) {
+                        if (this.perfilEmUso(perfil) || this.salvandoPerfil) return;
+                        const confirmado = await window.fiscalConfirm?.({
+                            title: 'Excluir perfil',
+                            message: 'Deseja excluir o perfil "' + perfil.nome + '"? Esta ação não pode ser desfeita.',
+                            confirmText: 'Excluir perfil',
+                            cancelText: 'Cancelar',
+                        });
+                        if (!confirmado) return;
+
+                        this.salvandoPerfil = true;
+                        this.mensagemPerfil = '';
+                        try {
+                            const response = await fiscalFetch('/api/perfis/' + perfil.id, {
+                                method: 'DELETE',
+                                headers: this.headers(),
+                            });
+                            const data = await this.parse(response);
+                            window.fiscalToast?.('success', data.message, 'Perfis');
+                            if (Number(this.perfilSelecionadoId) === Number(perfil.id)) {
+                                this.perfilSelecionadoId = '';
+                                this.permissoesSelecionadas = [];
+                            }
+                            this.limparPerfilForm();
+                            await this.carregarTudo();
+                        } catch (error) {
+                            this.erroPerfil = true;
+                            this.mensagemPerfil = error.message;
+                        } finally {
+                            this.salvandoPerfil = false;
+                        }
+                    },
+                    async adicionarUsuarioPerfil() {
+                        if (!this.perfilForm.id || !this.usuarioPerfilFormId) return;
+
+                        this.salvandoPerfilUsuario = true;
+                        this.mensagemPerfil = '';
+                        try {
+                            const response = await fiscalFetch('/api/perfis/' + this.perfilForm.id + '/usuarios', {
+                                method: 'POST',
+                                headers: this.headers(),
+                                body: JSON.stringify({ id_usuario: Number(this.usuarioPerfilFormId) }),
+                            });
+                            const data = await this.parse(response);
+                            window.fiscalToast?.('success', data.message, 'Perfis');
+                            this.usuarioPerfilFormId = '';
+                            await this.carregarTudo();
+                            const perfilAtual = this.perfis.find((item) => Number(item.id) === Number(this.perfilForm.id));
+                            if (perfilAtual) this.editarPerfil(perfilAtual);
+                        } catch (error) {
+                            this.erroPerfil = true;
+                            this.mensagemPerfil = error.message;
+                        } finally {
+                            this.salvandoPerfilUsuario = false;
+                        }
+                    },
+                    async removerUsuarioPerfil(usuario) {
+                        if (!this.perfilForm.id || this.salvandoPerfilUsuario) return;
+
+                        this.salvandoPerfilUsuario = true;
+                        this.mensagemPerfil = '';
+                        try {
+                            const response = await fiscalFetch('/api/perfis/' + this.perfilForm.id + '/usuarios/' + usuario.id, {
+                                method: 'DELETE',
+                                headers: this.headers(),
+                            });
+                            const data = await this.parse(response);
+                            window.fiscalToast?.('success', data.message, 'Perfis');
+                            await this.carregarTudo();
+                            const perfilAtual = this.perfis.find((item) => Number(item.id) === Number(this.perfilForm.id));
+                            if (perfilAtual) this.editarPerfil(perfilAtual);
+                        } catch (error) {
+                            this.erroPerfil = true;
+                            this.mensagemPerfil = error.message;
+                        } finally {
+                            this.salvandoPerfilUsuario = false;
                         }
                     },
                     carregarPermissoesPerfil() {

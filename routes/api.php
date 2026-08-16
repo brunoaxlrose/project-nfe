@@ -50,5 +50,10 @@ Route::middleware(['jwt'])->group(function (): void {
     Route::post('/usuarios', [UsuarioController::class, 'store'])->middleware('permission:usuarios.criar');
     Route::put('/usuarios/{usuario}', [UsuarioController::class, 'update'])->middleware('permission:usuarios.editar');
     Route::get('/perfis', [UsuarioController::class, 'perfis'])->middleware('permission:perfis.gerenciar');
+    Route::post('/perfis', [UsuarioController::class, 'storePerfil'])->middleware('permission:perfis.gerenciar');
+    Route::put('/perfis/{perfil}', [UsuarioController::class, 'updatePerfil'])->middleware('permission:perfis.gerenciar');
+    Route::delete('/perfis/{perfil}', [UsuarioController::class, 'destroyPerfil'])->middleware('permission:perfis.gerenciar');
+    Route::post('/perfis/{perfil}/usuarios', [UsuarioController::class, 'adicionarUsuarioPerfil'])->middleware('permission:perfis.gerenciar');
+    Route::delete('/perfis/{perfil}/usuarios/{usuario}', [UsuarioController::class, 'removerUsuarioPerfil'])->middleware('permission:perfis.gerenciar');
     Route::put('/perfis/{perfil}/permissoes', [UsuarioController::class, 'atualizarPermissoes'])->middleware('permission:perfis.gerenciar');
 });
