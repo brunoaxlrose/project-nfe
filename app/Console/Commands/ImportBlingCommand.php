@@ -17,11 +17,11 @@ class ImportBlingCommand extends Command
 {
     protected $signature = 'bling:import
         {contacts : Caminho do CSV de contatos exportado pelo Bling}
-        {products : Caminho do CSV de produtos exportado pelo Bling}
+        {products : Caminho do CSV de produto exportado pelo Bling}
         {--empresa=2 : ID da empresa que receberá os dados}
         {--dry-run : Apenas valida e apresenta o resumo, sem gravar no banco}';
 
-    protected $description = 'Importa contatos e produtos do Bling para uma empresa do FiscalFlow';
+    protected $description = 'Importa contatos e produto do Bling para uma empresa do FiscalFlow';
 
     public function handle(): int
     {
@@ -30,7 +30,7 @@ class ImportBlingCommand extends Command
         $productsPath = (string) $this->argument('products');
 
         $empresa = Empresa::query()->withoutGlobalScopes()->find($empresaId);
-        $user = User::query()->where('empresa_id', $empresaId)->where('active', true)->first();
+        $user = User::query()->where('id_empresa', $empresaId)->where('ativo', true)->first();
 
         if (!$empresa || !$user) {
             $this->error('Empresa ou usuário ativo não encontrado para o ID informado.');
@@ -46,14 +46,14 @@ class ImportBlingCommand extends Command
             $summary = $this->summarize($contacts, $products);
 
             $this->line('Contatos lidos: '.$summary['contacts_total']);
-            $this->line('Clientes: '.$summary['clients_total']);
+            $this->line('cliente: '.$summary['clients_total']);
             $this->line('Fornecedores: '.$summary['suppliers_total']);
-            $this->line('Produtos: '.$summary['products_total']);
+            $this->line('produto: '.$summary['products_total']);
 
             if ($summary['invalid_contacts'] || $summary['invalid_products'] || $summary['unknown_cities']) {
                 $this->warn('Foram encontradas linhas que não podem ser importadas:');
                 $this->line('Contatos inválidos: '.$summary['invalid_contacts']);
-                $this->line('Produtos inválidos: '.$summary['invalid_products']);
+                $this->line('produto inválidos: '.$summary['invalid_products']);
                 $this->line('Municípios sem código IBGE: '.$summary['unknown_cities']);
 
                 return self::FAILURE;
@@ -74,9 +74,9 @@ class ImportBlingCommand extends Command
             });
 
             $this->info('Importação concluída para a empresa '.$empresaId.'.');
-            $this->line('Clientes inseridos/atualizados: '.$result['clients']);
+            $this->line('cliente inseridos/atualizados: '.$result['clients']);
             $this->line('Fornecedores inseridos/atualizados: '.$result['suppliers']);
-            $this->line('Produtos inseridos/atualizados: '.$result['products']);
+            $this->line('produto inseridos/atualizados: '.$result['products']);
 
             return self::SUCCESS;
         } catch (\Throwable $exception) {
@@ -206,7 +206,7 @@ class ImportBlingCommand extends Command
             Produto::query()->updateOrCreate(
                 ['codigo' => $codigo],
                 [
-                    'empresa_id' => $empresaId,
+                    'id_empresa' => $empresaId,
                     'descricao' => mb_substr(trim($row['Descrição'] ?? ''), 0, 120),
                     'ncm' => $ncm,
                     'valor_unitario' => $this->decimal($row['Preço'] ?? '0'),
@@ -226,7 +226,7 @@ class ImportBlingCommand extends Command
     private function clientData(array $row, int $empresaId, string $documento): array
     {
         return [
-            'empresa_id' => $empresaId,
+            'id_empresa' => $empresaId,
             'razao_social' => mb_substr(trim($row['Nome'] ?? ''), 0, 120),
             'documento' => $documento,
             'inscricao_estadual' => $this->nullable($row['IE / RG'] ?? ''),
@@ -245,7 +245,7 @@ class ImportBlingCommand extends Command
     private function supplierData(array $row, int $empresaId, string $documento): array
     {
         return [
-            'empresa_id' => $empresaId,
+            'id_empresa' => $empresaId,
             'nome_razao_social' => mb_substr(trim($row['Nome'] ?? ''), 0, 120),
             'documento' => $documento,
             'inscricao_estadual' => $this->nullable($row['IE / RG'] ?? ''),

@@ -13,7 +13,7 @@ use Database\Seeders\NaturezaOperacaoSeeder;
 
 class CatalogController extends Controller
 {
-    public function destinatarios(): JsonResponse
+    public function destinatario(): JsonResponse
     {
         return response()->json(Destinatario::query()->where('ativo', true)->orderBy('nome_razao_social')->get());
     }
@@ -37,7 +37,7 @@ class CatalogController extends Controller
 
     public function naturezas(Request $request): JsonResponse
     {
-        $empresaId = (int) $request->user()->empresa_id;
+        $empresaId = (int) $request->user()->id_empresa;
         $naturezas = NaturezaOperacao::query()
             ->where('ativa', true)
             ->orderBy('nome')
@@ -84,7 +84,7 @@ class CatalogController extends Controller
         ]);
 
         $data['ativo'] = true;
-        $data['empresa_id'] = $request->user()->empresa_id;
+        $data['id_empresa'] = $request->user()->id_empresa;
 
         $cliente = DB::transaction(function () use ($data): Cliente {
             return Cliente::query()->updateOrCreate(['documento' => $data['documento']], $data);

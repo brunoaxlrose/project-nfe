@@ -1,7 +1,7 @@
 <div
     x-data="toastNotifications()"
     x-on:fiscal-toast.window="add($event.detail)"
-    class="pointer-events-none fixed inset-x-4 top-24 z-50 flex flex-col items-end gap-3 sm:left-auto sm:w-full sm:max-w-md"
+    class="pointer-events-none fixed inset-x-4 top-24 z-[120] flex flex-col items-end gap-3 sm:left-auto sm:w-full sm:max-w-md"
     aria-live="polite"
     aria-atomic="true"
 >

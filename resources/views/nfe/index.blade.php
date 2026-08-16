@@ -15,10 +15,10 @@
                     <span aria-hidden="true">↓</span>
                     Exportar CSV
                 </button>
-                <a href="{{ route('nfe.create') }}" class="inline-flex items-center gap-2 bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
+                <button x-show="can('nfe.criar')" x-cloak type="button" @click="abrirModalEmissao" class="inline-flex items-center gap-2 bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
                     <x-icon name="plus" class="h-4 w-4" />
                     Nova NF-e
-                </a>
+                </button>
             </div>
         </div>
 
@@ -113,11 +113,11 @@
                                 <td class="relative px-5 py-4 text-right">
                                     <button type="button" @click="activeMenu = activeMenu === nota.id ? null : nota.id" class="inline-flex h-8 w-8 items-center justify-center text-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900" :aria-expanded="activeMenu === nota.id" aria-label="Abrir ações da nota">⋮</button>
                                     <div x-show="activeMenu === nota.id" x-cloak @click.outside="activeMenu = null" class="absolute right-5 top-12 z-30 w-60 border border-slate-200 bg-white py-1 text-left shadow-xl">
-                                        <button type="button" @click="download(nota, 'pdf')" class="action-item"><span>▣</span> Gerar PDF DANFE / imprimir</button>
-                                        <button type="button" @click="download(nota, 'xml')" class="action-item"><span>&lt;/&gt;</span> Exportar XML</button>
-                                        <button type="button" @click="abrirModal('cancelar', nota)" :disabled="!['autorizada', 'simulada'].includes(nota.status)" class="action-item disabled:cursor-not-allowed disabled:opacity-40"><span>×</span> Cancelar NF-e</button>
-                                        <button type="button" @click="abrirModal('cce', nota)" :disabled="nota.status !== 'autorizada'" class="action-item disabled:cursor-not-allowed disabled:opacity-40"><span>✎</span> Carta de correção (CC-e)</button>
-                                        <button type="button" @click="clonar(nota)" class="action-item"><span>⧉</span> Clonar nota</button>
+                                        <button x-show="can('nfe.baixar')" x-cloak type="button" @click="download(nota, 'pdf')" class="action-item"><span>▣</span> Gerar PDF DANFE / imprimir</button>
+                                        <button x-show="can('nfe.baixar')" x-cloak type="button" @click="download(nota, 'xml')" class="action-item"><span>&lt;/&gt;</span> Exportar XML</button>
+                                        <button x-show="can('nfe.cancelar')" x-cloak type="button" @click="abrirModal('cancelar', nota)" :disabled="!['autorizada', 'simulada'].includes(nota.status)" class="action-item disabled:cursor-not-allowed disabled:opacity-40"><span>×</span> Cancelar NF-e</button>
+                                        <button x-show="can('nfe.cce')" x-cloak type="button" @click="abrirModal('cce', nota)" :disabled="nota.status !== 'autorizada'" class="action-item disabled:cursor-not-allowed disabled:opacity-40"><span>✎</span> Carta de correção (CC-e)</button>
+                                        <button x-show="can('nfe.clonar')" x-cloak type="button" @click="clonar(nota)" class="action-item"><span>⧉</span> Clonar nota</button>
                                     </div>
                                 </td>
                             </tr>
@@ -149,31 +149,105 @@
                 <div class="mt-6 flex justify-end gap-3"><button type="button" @click="fecharModal" class="border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Voltar</button><button type="button" @click="enviarModal" :disabled="modal.loading" class="inline-flex items-center gap-2 bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"><span x-show="modal.loading" x-cloak class="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-white"></span><span x-text="modal.type === 'cce' ? 'Enviar CC-e' : 'Solicitar cancelamento'"></span></button></div>
             </div>
         </div>
+
+        <div
+            x-show="isModalEmissaoOpen"
+            x-cloak
+            @keydown.escape.window="fecharModalEmissao"
+            @nfe-emissao-loading.window="emissaoLoading = Boolean($event.detail.loading)"
+            @nfe-emitida.window="concluirEmissao($event.detail)"
+            class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-3 sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Nova nota fiscal"
+        >
+            <div class="flex max-h-[92vh] w-full max-w-[1500px] flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl">
+                <header class="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+                    <div class="min-w-0">
+                        <p class="truncate text-base font-bold text-slate-950 sm:text-lg">Nova nota fiscal</p>
+                        <p class="hidden text-xs text-slate-500 sm:block">Preencha, revise e emita sem sair do histórico.</p>
+                    </div>
+                    <div class="flex shrink-0 items-center gap-2">
+                        <span x-show="emissaoLoading" x-cloak class="hidden items-center gap-2 text-xs font-medium text-blue-700 sm:inline-flex"><span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"></span>Processando emissão</span>
+                        <button type="button" @click="fecharModalEmissao" :disabled="emissaoLoading" class="border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Cancelar</button>
+                        <button type="button" @click="fecharModalEmissao" :disabled="emissaoLoading" class="flex h-10 w-10 items-center justify-center text-xl text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Fechar emissão">×</button>
+                    </div>
+                </header>
+                <div class="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-3 sm:p-5 lg:p-6">
+                    @include('nfe.partials.emissao-form', ['modalMode' => true])
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        window.registerFiscalAlpine((Alpine) => {
-            Alpine.data('notasPage', () => ({
+        if (!window.fiscalNotasPageRegistered) {
+            window.fiscalNotasPageRegistered = true;
+            window.registerFiscalAlpine((Alpine) => {
+                Alpine.data('notasPage', () => ({
                 notas: [],
                 page: 1,
                 total: 0,
                 hasMore: false,
                 loading: false,
+                pendingPage: null,
+                loadRequestId: 0,
                 error: '',
                 activeMenu: null,
                 selected: [],
+                isModalEmissaoOpen: false,
+                emissaoLoading: false,
                 periodo: '30d',
                 periodoDescricao: 'Últimos 30 dias',
                 filters: { busca: '', data_inicio: '', data_fim: '', status: '' },
                 modal: { open: false, type: '', nota: null, text: '', error: '', loading: false },
+                initialized: false,
 
                 get allSelected() {
                     return this.notas.length > 0 && this.notas.every((nota) => this.selected.includes(nota.id));
                 },
 
                 init() {
+                    if (this.initialized) {
+                        return;
+                    }
+
+                    this.initialized = true;
                     this.setPeriodo(this.periodo, false);
                     this.load();
+                },
+
+                destroy() {
+                    document.body.classList.remove('overflow-hidden');
+                },
+
+                abrirModalEmissao() {
+                    if (this.isModalEmissaoOpen) {
+                        return;
+                    }
+
+                    this.isModalEmissaoOpen = true;
+                    document.body.classList.add('overflow-hidden');
+                    this.$nextTick(() => window.dispatchEvent(new CustomEvent('abrir-formulario-nfe')));
+                },
+
+                fecharModalEmissao() {
+                    if (this.emissaoLoading) {
+                        window.fiscalToast?.('warning', 'Aguarde a conclusão da emissão antes de fechar.', 'Emissão em andamento');
+                        return;
+                    }
+
+                    this.isModalEmissaoOpen = false;
+                    document.body.classList.remove('overflow-hidden');
+                    window.dispatchEvent(new CustomEvent('resetar-formulario-nfe'));
+                },
+
+                async concluirEmissao() {
+                    this.emissaoLoading = false;
+                    this.isModalEmissaoOpen = false;
+                    document.body.classList.remove('overflow-hidden');
+                    window.dispatchEvent(new CustomEvent('resetar-formulario-nfe'));
+                    await this.load(1, true);
                 },
 
                 headers() {
@@ -233,8 +307,13 @@
                     this.setPeriodo('30d');
                 },
 
-                async load(nextPage = 1) {
-                    if (this.loading) return;
+                async load(nextPage = 1, force = false) {
+                    if (this.loading && !force) {
+                        this.pendingPage = nextPage;
+                        return;
+                    }
+
+                    const requestId = ++this.loadRequestId;
                     this.loading = true;
                     this.error = '';
                     this.page = nextPage;
@@ -245,15 +324,27 @@
                         const response = await fiscalFetch('/api/faturamento/notas?' + params.toString(), { headers: this.headers() });
                         const data = await response.json().catch(() => ({}));
                         if (!response.ok) throw new Error(data.message || 'Não foi possível carregar as notas.');
-                        this.notas = data.data || [];
-                        this.total = data.total || 0;
-                        this.hasMore = Boolean(data.next_page_url);
-                        this.selected = this.selected.filter((id) => this.notas.some((nota) => nota.id === id));
+                        if (requestId === this.loadRequestId) {
+                            this.notas = data.data || [];
+                            this.total = data.total || 0;
+                            this.hasMore = Boolean(data.next_page_url);
+                            this.selected = this.selected.filter((id) => this.notas.some((nota) => nota.id === id));
+                        }
                     } catch (error) {
-                        this.error = error.message;
-                        window.fiscalToast?.('error', error.message, 'Histórico indisponível');
+                        if (requestId === this.loadRequestId) {
+                            this.error = error.message;
+                            window.fiscalToast?.('error', error.message, 'Histórico indisponível');
+                        }
                     } finally {
-                        this.loading = false;
+                        if (requestId === this.loadRequestId) {
+                            this.loading = false;
+
+                            if (this.pendingPage !== null) {
+                                const pendingPage = this.pendingPage;
+                                this.pendingPage = null;
+                                this.load(pendingPage);
+                            }
+                        }
                     }
                 },
 
@@ -389,13 +480,14 @@
                         if (!response.ok) throw new Error(data.message || 'Não foi possível clonar a nota.');
                         sessionStorage.setItem('fiscalflow_clone_draft', JSON.stringify(data.payload || {}));
                         window.fiscalToast?.('success', 'Rascunho criado. Abrindo a nova emissão.', 'Nota clonada');
-                        window.location.href = '{{ route('nfe.create') }}';
+                        this.abrirModalEmissao();
                     } catch (error) {
                         window.fiscalToast?.('error', error.message, 'Clonagem indisponível');
                     }
                 },
-            }));
-        });
+                }));
+            });
+        }
     </script>
     <style>
         .action-item { display: flex; width: 100%; align-items: center; gap: .65rem; padding: .65rem .8rem; font-size: .78rem; color: #334155; }

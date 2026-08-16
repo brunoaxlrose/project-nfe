@@ -26,14 +26,14 @@ final class NfeEmissionService
         $nfe = null;
 
         try {
-            $natureza = NaturezaOperacao::query()->findOrFail($payload['natureza_operacao_id']);
-            $cliente = !empty($payload['cliente_id']) ? Cliente::query()->findOrFail($payload['cliente_id']) : null;
-            $destinatario = $cliente ? null : Destinatario::query()->findOrFail($payload['destinatario_id']);
+            $natureza = NaturezaOperacao::query()->findOrFail($payload['id_natureza_operacao']);
+            $cliente = !empty($payload['id_cliente']) ? Cliente::query()->findOrFail($payload['id_cliente']) : null;
+            $destinatario = $cliente ? null : Destinatario::query()->findOrFail($payload['id_destinatario']);
             $payload = $this->applyCatalogRules($payload, $natureza, $cliente, $destinatario);
             $nfe = Nfe::create([
                 'numero' => $payload['numero'], 'serie' => $payload['serie'] ?? 1,
-                'status' => 'gerando', 'payload' => $payload, 'usuario_id' => $usuarioId,
-                'cliente_id' => $cliente?->id, 'destinatario_id' => $destinatario?->id, 'natureza_operacao_id' => $natureza->id,
+                'status' => 'gerando', 'payload' => $payload, 'id_usuario' => $usuarioId,
+                'id_cliente' => $cliente?->id, 'id_destinatario' => $destinatario?->id, 'id_natureza_operacao' => $natureza->id,
                 'destinatario_documento' => preg_replace('/\D+/', '', (string) ($payload['destinatario']['cnpj'] ?? $payload['destinatario']['cpf'] ?? '')),
             ]);
 
@@ -90,8 +90,8 @@ final class NfeEmissionService
         } catch (\Throwable $e) {
             Log::error('Falha técnica na emissão da NF-e.', [
                 'exception' => $e,
-                'usuario_id' => $usuarioId,
-                'empresa_id' => auth()->user()?->empresa_id,
+                'id_usuario' => $usuarioId,
+                'id_empresa' => auth()->user()?->id_empresa,
                 'nfe_id' => $nfe?->id,
             ]);
             $message = $this->friendlyIntegrationMessage($e);
@@ -112,10 +112,10 @@ final class NfeEmissionService
 
     private function currentEmissor(): ?ConfiguracaoEmissor
     {
-        $empresaId = auth()->user()?->empresa_id;
+        $empresaId = auth()->user()?->id_empresa;
 
         return $empresaId
-            ? ConfiguracaoEmissor::query()->where('empresa_id', $empresaId)->first()
+            ? ConfiguracaoEmissor::query()->where('id_empresa', $empresaId)->first()
             : null;
     }
 
@@ -171,13 +171,13 @@ final class NfeEmissionService
     private function tools(): Tools
     {
         $user = auth()->user();
-        if (!$user?->empresa_id) {
+        if (!$user?->id_empresa) {
             throw new NfeEmissionException('Não foi possível identificar a empresa da sessão.', 401, 'erro');
         }
         $emissor = ConfiguracaoEmissor::query()
-            ->where('empresa_id', $user->empresa_id)
+            ->where('id_empresa', $user->id_empresa)
             ->first();
-        if (!$emissor || (int) $emissor->empresa_id !== (int) $user->empresa_id) {
+        if (!$emissor || (int) $emissor->id_empresa !== (int) $user->id_empresa) {
             throw new NfeEmissionException('Configure o emissor da empresa antes de emitir uma NF-e.', 422, 'erro');
         }
         if (!$emissor->certificado_base64) {

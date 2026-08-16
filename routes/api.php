@@ -6,6 +6,7 @@ use App\Http\Controllers\FaturamentoController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\EmpresaConfiguracaoController;
 use App\Http\Controllers\RegisterController;
+use App\Http\Controllers\UsuarioController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/login', [AuthController::class, 'login'])
@@ -14,34 +15,40 @@ Route::post('/auth/register', [RegisterController::class, 'store'])
     ->middleware(['json.payload', 'throttle:5,1']);
 
 Route::middleware(['jwt', 'json.payload'])->group(function (): void {
-    Route::get('/destinatarios', [CatalogController::class, 'destinatarios'])->middleware('role:Administrador,Operador');
-    Route::get('/destinatarios/buscar', [CatalogController::class, 'destinatariosBuscar'])->middleware('role:Administrador,Operador');
-    Route::get('/naturezas-operacao', [CatalogController::class, 'naturezas'])->middleware('role:Administrador,Operador');
-    Route::get('/clientes/buscar', [CatalogController::class, 'clientesBuscar'])->middleware('role:Administrador,Operador');
-    Route::post('/clientes/importar', [CatalogController::class, 'importarCliente'])->middleware('role:Administrador,Operador');
-    Route::get('/produtos/buscar', [CatalogController::class, 'produtosBuscar'])->middleware('role:Administrador,Operador');
+    Route::get('/destinatarios', [CatalogController::class, 'destinatarios'])->middleware('permission:clientes.visualizar');
+    Route::get('/destinatarios/buscar', [CatalogController::class, 'destinatariosBuscar'])->middleware('permission:clientes.visualizar');
+    Route::get('/naturezas-operacao', [CatalogController::class, 'naturezas'])->middleware('permission:naturezas.visualizar');
+    Route::get('/clientes/buscar', [CatalogController::class, 'clientesBuscar'])->middleware('permission:clientes.visualizar');
+    Route::post('/clientes/importar', [CatalogController::class, 'importarCliente'])->middleware('permission:clientes.criar');
+    Route::get('/produtos/buscar', [CatalogController::class, 'produtosBuscar'])->middleware('permission:produtos.visualizar');
     Route::post('/nfe', [NfeController::class, 'store'])
-        ->middleware('role:Administrador,Operador');
+        ->middleware('permission:nfe.criar');
     Route::get('/nfe/proximo-numero', [NfeController::class, 'nextNumber'])
-        ->middleware('role:Administrador,Operador');
+        ->middleware('permission:nfe.criar');
     Route::post('/nfe/{nfe}/consultar', [NfeController::class, 'consult'])
-        ->middleware('role:Administrador,Operador');
+        ->middleware('permission:nfe.consultar');
 
     Route::get('/faturamento/notas', [FaturamentoController::class, 'index'])
-        ->middleware('role:Administrador,Operador');
+        ->middleware('permission:nfe.visualizar');
     Route::get('/faturamento/notas/{nfe}/download', [FaturamentoController::class, 'download'])
-        ->middleware('role:Administrador,Operador');
+        ->middleware('permission:nfe.baixar');
     Route::post('/faturamento/notas/{nfe}/clonar', [FaturamentoController::class, 'clone'])
-        ->middleware('role:Administrador,Operador');
+        ->middleware('permission:nfe.clonar');
     Route::post('/faturamento/notas/{nfe}/cancelar', [FaturamentoController::class, 'cancelar'])
-        ->middleware('role:Administrador');
+        ->middleware('permission:nfe.cancelar');
     Route::post('/faturamento/notas/{nfe}/cce', [FaturamentoController::class, 'cartaCorrecao'])
-        ->middleware('role:Administrador');
+        ->middleware('permission:nfe.cce');
 });
 
 Route::middleware(['jwt'])->group(function (): void {
-    Route::get('/configuracoes-emissor', [EmpresaConfiguracaoController::class, 'show'])->middleware('role:Administrador');
-    Route::post('/configuracoes-emissor', [EmpresaConfiguracaoController::class, 'update'])->middleware('role:Administrador');
-    Route::post('/configuracoes-emissor/testar-comunicacao', [EmpresaConfiguracaoController::class, 'testarComunicacao'])->middleware('role:Administrador');
-    Route::delete('/configuracoes-emissor/certificado', [EmpresaConfiguracaoController::class, 'removerCertificado'])->middleware('role:Administrador');
+    Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::get('/configuracoes-emissor', [EmpresaConfiguracaoController::class, 'show'])->middleware('permission:configuracoes.visualizar');
+    Route::post('/configuracoes-emissor', [EmpresaConfiguracaoController::class, 'update'])->middleware('permission:configuracoes.editar');
+    Route::post('/configuracoes-emissor/testar-comunicacao', [EmpresaConfiguracaoController::class, 'testarComunicacao'])->middleware('permission:configuracoes.editar');
+    Route::delete('/configuracoes-emissor/certificado', [EmpresaConfiguracaoController::class, 'removerCertificado'])->middleware('permission:certificado.gerenciar');
+    Route::get('/usuarios', [UsuarioController::class, 'index'])->middleware('permission:usuarios.visualizar');
+    Route::post('/usuarios', [UsuarioController::class, 'store'])->middleware('permission:usuarios.criar');
+    Route::put('/usuarios/{usuario}', [UsuarioController::class, 'update'])->middleware('permission:usuarios.editar');
+    Route::get('/perfis', [UsuarioController::class, 'perfis'])->middleware('permission:perfis.gerenciar');
+    Route::put('/perfis/{perfil}/permissoes', [UsuarioController::class, 'atualizarPermissoes'])->middleware('permission:perfis.gerenciar');
 });

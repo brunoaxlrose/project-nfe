@@ -2,17 +2,19 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\UsesCorporateNaming;
 use App\Traits\Tenantable;
 use Illuminate\Database\Eloquent\Model;
 
 class ConfiguracaoEmissor extends Model
 {
-    use Tenantable;
+    use Tenantable, UsesCorporateNaming;
 
-    protected $table = 'configuracoes_emissor';
+    protected $table = 'configuracao_emissor';
+    protected $primaryKey = 'id_configuracao_emissor';
 
     protected $fillable = [
-        'empresa_id',
+        'id_empresa',
         'razao_social',
         'nome_fantasia',
         'cnpj',
@@ -47,6 +49,7 @@ class ConfiguracaoEmissor extends Model
         'cfop_padrao',
         'csosn_padrao',
     ];
+    protected $appends = ['id', 'empresa_id'];
 
     protected $casts = [
         'inscricao_estadual_isento' => 'boolean',
@@ -58,8 +61,8 @@ class ConfiguracaoEmissor extends Model
 
     public static function current(): self
     {
-        $empresaId = auth()->user()?->empresa_id;
+        $empresaId = auth()->user()?->id_empresa;
 
-        return static::query()->firstOrCreate(['empresa_id' => $empresaId]);
+        return static::query()->firstOrCreate(['id_empresa' => $empresaId]);
     }
 }

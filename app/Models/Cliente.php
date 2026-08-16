@@ -1,5 +1,37 @@
 <?php
+
 namespace App\Models;
-use Illuminate\Database\Eloquent\Model;
+
+use App\Models\Concerns\UsesCorporateNaming;
 use App\Traits\Tenantable;
-class Cliente extends Model { use Tenantable; protected $fillable=['empresa_id','razao_social','documento','inscricao_estadual','cep','logradouro','numero','complemento','bairro','cidade','codigo_ibge','uf','ativo']; protected $casts=['ativo'=>'boolean']; }
+use Illuminate\Database\Eloquent\Model;
+
+class Cliente extends Model
+{
+    use Tenantable, UsesCorporateNaming;
+
+    protected $table = 'cliente';
+    protected $primaryKey = 'id_cliente';
+
+    protected $fillable = [
+        'id_empresa',
+        'razao_social',
+        'documento',
+        'inscricao_estadual',
+        'cep',
+        'logradouro',
+        'numero',
+        'complemento',
+        'bairro',
+        'cidade',
+        'codigo_ibge',
+        'uf',
+        'ativo',
+    ];
+
+    protected $casts = [
+        'ativo' => 'boolean',
+    ];
+
+    protected $appends = ['id', 'empresa_id'];
+}

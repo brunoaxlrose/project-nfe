@@ -14,9 +14,14 @@ final class JwtService
     public function issue(User $user): string
     {
         $now = now()->timestamp;
+        $profileSlug = $user->perfilAcesso?->slug ?: strtolower((string) $user->perfil);
+
         return JWT::encode([
             'iss' => config('jwt.issuer'), 'sub' => (string) $user->id,
-            'role' => $user->perfil, 'empresa_id' => (string) $user->empresa_id, 'iat' => $now,
+            'role' => $profileSlug,
+            'id_perfil' => (string) $user->id_perfil,
+            'id_empresa' => (string) $user->id_empresa,
+            'iat' => $now,
             'exp' => $now + (config('jwt.ttl') * 60), 'jti' => (string) Str::uuid(),
         ], $this->secret(), config('jwt.algorithm'));
     }
@@ -31,8 +36,18 @@ final class JwtService
             throw new RuntimeException('Token inválido.', previous: $e);
         }
 
-        $user = User::query()->find($claims->sub ?? null);
-        if (!$user || !$user->active || ($claims->role ?? null) !== $user->perfil || (string) ($claims->empresa_id ?? '') !== (string) $user->empresa_id) {
+        $user = User::query()
+            ->with(['perfilAcesso.permissoes', 'permissoesDiretas'])
+            ->find($claims->sub ?? null);
+        $profileSlug = $user?->perfilAcesso?->slug ?: strtolower((string) $user?->perfil);
+
+        if (
+            !$user
+            || !$user->active
+            || ($claims->role ?? null) !== $profileSlug
+            || (string) ($claims->id_perfil ?? '') !== (string) $user->id_perfil
+            || (string) ($claims->id_empresa ?? '') !== (string) $user->id_empresa
+        ) {
             throw new RuntimeException('Usuário inválido ou inativo.');
         }
         return $user;

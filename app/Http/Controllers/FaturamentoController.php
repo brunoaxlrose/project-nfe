@@ -26,11 +26,11 @@ class FaturamentoController extends Controller
         ]);
         $query = Nfe::query()
             ->with([
-                'cliente:id,razao_social',
-                'destinatario:id,nome_razao_social',
-                'naturezaOperacao:id,nome,tipo_movimento,cfop_padrao,csosn_padrao',
+                'cliente:id_cliente,razao_social',
+                'destinatario:id_destinatario,nome_razao_social',
+                'naturezaOperacao:id_natureza_operacao,nome,tipo_movimento,cfop_padrao,csosn_padrao',
             ])
-            ->select(['id','numero','serie','chave_acesso','status','protocolo','cstat','xmotivo','destinatario_documento','usuario_id','cliente_id','destinatario_id','natureza_operacao_id','created_at','danfe_path','payload']);
+            ->select(['id_nota_fiscal','numero','serie','chave_acesso','status','protocolo','cstat','xmotivo','destinatario_documento','id_usuario','id_cliente','id_destinatario','id_natureza_operacao','created_at','danfe_path','payload']);
         if (!empty($filters['data_inicio'])) $query->whereDate('created_at', '>=', $filters['data_inicio']);
         if (!empty($filters['data_fim'])) $query->whereDate('created_at', '<=', $filters['data_fim']);
         if (!empty($filters['status'])) $query->where('status', $filters['status']);
@@ -46,7 +46,7 @@ class FaturamentoController extends Controller
             });
         }
 
-        $paginated = $query->latest('id')->paginate($filters['per_page'] ?? 20)->withQueryString();
+        $paginated = $query->latest('id_nota_fiscal')->paginate($filters['per_page'] ?? 20)->withQueryString();
         $paginated->getCollection()->transform(function (Nfe $nota): array {
             return [
                 ...$nota->toArray(),
@@ -68,10 +68,10 @@ class FaturamentoController extends Controller
                 'serie' => $nfe->serie,
                 'status' => 'rascunho',
                 'payload' => $nfe->payload ?? [],
-                'usuario_id' => $request->user()->id,
-                'cliente_id' => $nfe->cliente_id,
-                'destinatario_id' => $nfe->destinatario_id,
-                'natureza_operacao_id' => $nfe->natureza_operacao_id,
+                'id_usuario' => $request->user()->id,
+                'id_cliente' => $nfe->id_cliente,
+                'id_destinatario' => $nfe->id_destinatario,
+                'id_natureza_operacao' => $nfe->id_natureza_operacao,
                 'destinatario_documento' => $nfe->destinatario_documento,
             ]);
         });
@@ -175,7 +175,7 @@ class FaturamentoController extends Controller
             Log::error('Falha técnica ao preparar download da NF-e.', [
                 'exception' => $exception,
                 'nfe_id' => $nfe->id,
-                'usuario_id' => $request->user()?->id,
+                'id_usuario' => $request->user()?->id,
             ]);
 
             return response()->json(['message' => 'Não foi possível preparar o arquivo para download. Tente novamente.'], 500);

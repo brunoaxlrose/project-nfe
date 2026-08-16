@@ -22,9 +22,16 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
       JWT_SECRET_FILE: ${JWT_SECRET_FILE:-}
     volumes:
-      # Monte somente a pasta local que contém o A1. Ela não entra na imagem.
+      - ./app:/var/www/html/app
+      - ./bootstrap/app.php:/var/www/html/bootstrap/app.php
+      - ./bootstrap/providers.php:/var/www/html/bootstrap/providers.php
+      - ./config:/var/www/html/config
+      - ./database:/var/www/html/database
+      - ./resources:/var/www/html/resources
+      - ./routes:/var/www/html/routes
       - ${NFE_CERTIFICATE_DIR:-./secrets/certificates}:/run/secrets/nfe:ro
       - nfe_documents:/var/www/html/storage/app/nfe
+      - certificate_documents:/var/www/html/storage/app/certificados
     depends_on:
       db:
         condition: service_healthy
@@ -49,3 +56,4 @@ services:
 volumes:
   postgres_data:
   nfe_documents:
+  certificate_documents:

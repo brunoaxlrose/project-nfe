@@ -5,10 +5,12 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\AuthenticateJwt;
 use App\Http\Middleware\EnsureJsonPayload;
+use App\Http\Middleware\RequirePermission;
 use App\Http\Middleware\RequireRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(web: __DIR__.'/../routes/web.php', api: __DIR__.'/../routes/api.php', commands: __DIR__.'/../routes/console.php', health: '/up')
@@ -17,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'jwt' => AuthenticateJwt::class,
             'json.payload' => EnsureJsonPayload::class,
+            'permission' => RequirePermission::class,
             'role' => RequireRole::class,
         ]);
     })
@@ -32,6 +35,21 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (\Throwable $exception, Request $request) {
             if (!$request->expectsJson()) {
                 return null;
+            }
+
+            if ($exception instanceof HttpExceptionInterface) {
+                $status = $exception->getStatusCode();
+                $message = match ($status) {
+                    403 => 'Você não possui permissão para realizar esta ação.',
+                    404 => 'Recurso não encontrado.',
+                    405 => 'Operação não permitida para este endereço.',
+                    429 => 'Muitas tentativas em pouco tempo. Aguarde e tente novamente.',
+                    default => $status >= 500
+                        ? 'Não foi possível concluir a operação agora. Tente novamente em alguns instantes.'
+                        : 'Não foi possível concluir a solicitação.',
+                };
+
+                return response()->json(['message' => $message], $status);
             }
 
             Log::error('Erro não tratado em uma requisição JSON.', [

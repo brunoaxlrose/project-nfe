@@ -34,7 +34,7 @@ final class SefazCommunicationService
             throw $exception;
         } catch (\Throwable $exception) {
             Log::warning('Falha no teste de comunicação com a SEFAZ.', [
-                'empresa_id' => $emissor->empresa_id,
+                'id_empresa' => $emissor->id_empresa,
                 'uf' => $emissor->uf,
                 'ambiente' => $ambiente ?? $emissor->ambiente,
                 'exception' => $exception,
@@ -52,9 +52,9 @@ final class SefazCommunicationService
 
     private function createTools(ConfiguracaoEmissor $emissor, ?int $ambiente = null): Tools
     {
-        $userEmpresaId = (int) auth()->user()?->empresa_id;
+        $userEmpresaId = (int) auth()->user()?->id_empresa;
 
-        if ($userEmpresaId <= 0 || $userEmpresaId !== (int) $emissor->empresa_id) {
+        if ($userEmpresaId <= 0 || $userEmpresaId !== (int) $emissor->id_empresa) {
             throw new NfeEmissionException(
                 'A configuração fiscal não pertence à empresa da sessão atual.',
                 403,

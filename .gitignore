@@ -1,6 +1,7 @@
 /vendor/
 /storage/*.key
-/storage/app/nfe/
+/storage/app/certificados/*
+/storage/app/nfe/*
 /secrets/
 *.pfx
 *.p12
@@ -8,3 +9,5 @@
 .env
 .env.*
 !.env.example
+docker-compose.yml
+docker-compose.override.yml

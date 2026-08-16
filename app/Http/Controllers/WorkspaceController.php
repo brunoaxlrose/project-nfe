@@ -28,6 +28,11 @@ class WorkspaceController extends Controller
         return $this->renderPage($request, 'configuracoes');
     }
 
+    public function usuarios(Request $request): View|string
+    {
+        return $this->renderPage($request, 'usuarios.index');
+    }
+
     private function renderPage(Request $request, string $view, array $data = []): View|string
     {
         if ($request->ajax()) {

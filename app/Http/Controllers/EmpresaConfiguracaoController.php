@@ -43,6 +43,12 @@ class EmpresaConfiguracaoController extends Controller
 
     public function update(Request $request): JsonResponse
     {
+        if ($request->hasFile('certificado') && !$request->user()->temPermissao('certificado.gerenciar')) {
+            return response()->json([
+                'message' => 'Você não possui permissão para alterar o certificado digital.',
+            ], 403);
+        }
+
         $request->merge([
             'cnpj' => $this->digits($request->input('cnpj')),
             'cep' => $this->digits($request->input('cep')),
@@ -100,7 +106,7 @@ class EmpresaConfiguracaoController extends Controller
 
                 $config->fill($attributes)->save();
 
-                $empresa = Empresa::query()->whereKey($config->empresa_id)->firstOrFail();
+                $empresa = Empresa::query()->whereKey($config->id_empresa)->firstOrFail();
                 $empresa->fill([
                     'razao_social' => $attributes['razao_social'],
                     'nome_fantasia' => $attributes['nome_fantasia'] ?? null,
@@ -122,8 +128,8 @@ class EmpresaConfiguracaoController extends Controller
         } catch (\Throwable $exception) {
             $this->deleteFiles($newFiles);
             Log::error('Falha ao salvar as preferências da empresa.', [
-                'empresa_id' => $config->empresa_id,
-                'usuario_id' => $request->user()?->id,
+                'id_empresa' => $config->id_empresa,
+                'id_usuario' => $request->user()?->id,
                 'exception' => $exception,
             ]);
 
@@ -320,10 +326,10 @@ class EmpresaConfiguracaoController extends Controller
 
     private function tenantPath(string $folder, UploadedFile $file): string
     {
-        $empresaId = (int) auth()->user()?->empresa_id;
+        $empresaId = (int) auth()->user()?->id_empresa;
         $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'bin');
 
-        return 'empresas/'.$empresaId.'/'.$folder.'/'.str()->uuid().'.'.$extension;
+        return 'empresa/'.$empresaId.'/'.$folder.'/'.str()->uuid().'.'.$extension;
     }
 
     private function deleteFiles(array $paths): void

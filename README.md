@@ -45,6 +45,17 @@ O certificado digital é tratado como uma informação confidencial. O acesso à
 
 O ambiente de homologação é indicado para testes e não possui valor fiscal. Depois da conferência dos dados e das regras tributárias, a empresa pode utilizar o ambiente de produção para emitir documentos com valor fiscal.
 
+## Preparação do ambiente local
+
+Antes do primeiro uso:
+
+1. Copie `docker-compose.yml.dist` para `docker-compose.yml`.
+2. Copie `.env.example` para `.env`.
+3. Preencha no `.env` apenas as informações do seu ambiente local.
+4. Inicie o FiscalFlow com `docker compose up -d --build`.
+
+O `docker-compose.yml` local, o `.env`, os certificados e os documentos fiscais permanecem fora do histórico do Git.
+
 ## Público do sistema
 
 O FiscalFlow foi pensado para empresas, escritórios e equipes que precisam centralizar a operação fiscal, reduzir tarefas repetitivas e acompanhar as emissões em uma única tela.

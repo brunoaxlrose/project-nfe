@@ -10,33 +10,39 @@
             <span x-text="error"></span>
         </div>
 
-        <div class="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-            <aside class="h-fit border border-slate-200 bg-white shadow-sm">
-                <div class="border-b border-slate-200 px-5 py-4">
-                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Preferências</p>
-                    <p class="mt-1 text-sm text-slate-500">Dados da conta emissora</p>
+        <form @submit.prevent="salvar" enctype="multipart/form-data" class="min-w-0 border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-200 bg-white px-5 pt-5 sm:px-8">
+                <div class="flex flex-col gap-4 pb-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Preferências da empresa</p>
+                        <h2 class="mt-2 text-xl font-bold text-slate-950" x-text="activeTabLabel()"></h2>
+                        <p class="mt-1 text-sm text-slate-500">Alterne entre as abas para ajustar dados fiscais, emissão e certificado digital.</p>
+                    </div>
+                    <div class="border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Empresa atual</p>
+                        <p class="mt-1 max-w-[360px] truncate font-semibold text-slate-900" x-text="form.razao_social || 'Configure os dados da empresa'"></p>
+                        <p class="mt-1 text-xs text-slate-500" x-text="form.cnpj || 'CNPJ não informado'"></p>
+                    </div>
                 </div>
-                <nav class="p-2" aria-label="Categorias de configuração">
-                    <template x-for="tab in tabs" :key="tab.id">
+
+                <nav class="-mb-px flex gap-6 overflow-x-auto" aria-label="Abas de configuração">
+                    <template x-for="tab in visibleTabs()" :key="tab.id">
                         <button
                             type="button"
                             @click="activeTab = tab.id"
-                            class="flex w-full items-center gap-3 px-3 py-3 text-left text-sm font-semibold transition"
-                            :class="activeTab === tab.id ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'"
+                            class="flex shrink-0 items-center gap-3 border-b-2 px-1 py-4 text-sm font-semibold transition"
+                            :class="activeTab === tab.id ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-900'"
                         >
-                            <span class="flex h-7 w-7 items-center justify-center bg-slate-100 text-xs font-bold" :class="activeTab === tab.id ? 'bg-blue-100 text-blue-700' : 'text-slate-500'" x-text="tab.number"></span>
+                            <span class="flex h-7 w-7 items-center justify-center border text-xs font-bold"
+                                :class="activeTab === tab.id ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-500'"
+                                x-text="tab.number"></span>
                             <span x-text="tab.label"></span>
                         </button>
                     </template>
                 </nav>
-                <div class="border-t border-slate-200 px-5 py-4">
-                    <p class="text-xs font-semibold text-slate-500">Empresa atual</p>
-                    <p class="mt-1 truncate text-sm font-semibold text-slate-900" x-text="form.razao_social || 'Configure os dados da empresa'"></p>
-                    <p class="mt-1 text-xs text-slate-500" x-text="form.cnpj || 'CNPJ não informado'"></p>
-                </div>
-            </aside>
+            </div>
 
-            <form @submit.prevent="salvar" enctype="multipart/form-data" class="min-w-0 border border-slate-200 bg-white shadow-sm">
+            <div>
                 <section x-show="activeTab === 'empresa'" class="space-y-8 p-5 sm:p-8">
                     <div>
                         <p class="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">01 · Cadastro fisco-legal</p>
@@ -47,22 +53,22 @@
                     <div class="grid gap-x-6 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
                         <label class="xl:col-span-2">
                             <span class="label">Razão social <b class="text-red-600">*</b></span>
-                            <input x-model="form.razao_social" :class="fieldClass('razao_social')" autocomplete="organization" required>
+                            <input x-model="form.razao_social" placeholder="Razão social igual ao cadastro da Receita Federal" :class="fieldClass('razao_social')" autocomplete="organization" required>
                             <p x-show="fieldError('razao_social')" class="field-error" x-text="fieldError('razao_social')"></p>
                         </label>
                         <label>
                             <span class="label">Nome fantasia</span>
-                            <input x-model="form.nome_fantasia" :class="fieldClass('nome_fantasia')" autocomplete="organization">
+                            <input x-model="form.nome_fantasia" placeholder="Nome comercial exibido internamente" :class="fieldClass('nome_fantasia')" autocomplete="organization">
                             <p x-show="fieldError('nome_fantasia')" class="field-error" x-text="fieldError('nome_fantasia')"></p>
                         </label>
                         <label>
                             <span class="label">CNPJ <b class="text-red-600">*</b></span>
-                            <input x-model="form.cnpj" x-mask="99.999.999/9999-99" inputmode="numeric" maxlength="18" :class="fieldClass('cnpj')" required>
+                            <input x-model="form.cnpj" x-mask="99.999.999/9999-99" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00" :class="fieldClass('cnpj')" required>
                             <p x-show="fieldError('cnpj')" class="field-error" x-text="fieldError('cnpj')"></p>
                         </label>
                         <label>
                             <span class="label">Inscrição estadual</span>
-                            <input x-model="form.inscricao_estadual" :disabled="form.inscricao_estadual_isento" :class="fieldClass('inscricao_estadual')" inputmode="numeric">
+                            <input x-model="form.inscricao_estadual" :disabled="form.inscricao_estadual_isento" placeholder="Informe a IE ou marque isento" :class="fieldClass('inscricao_estadual')" inputmode="numeric">
                             <p x-show="fieldError('inscricao_estadual')" class="field-error" x-text="fieldError('inscricao_estadual')"></p>
                         </label>
                         <label class="flex items-end gap-2 pb-3">
@@ -71,11 +77,11 @@
                         </label>
                         <label>
                             <span class="label">Inscrição municipal</span>
-                            <input x-model="form.inscricao_municipal" :class="fieldClass('inscricao_municipal')">
+                            <input x-model="form.inscricao_municipal" placeholder="Opcional" :class="fieldClass('inscricao_municipal')">
                         </label>
                         <label>
                             <span class="label">CNAE</span>
-                            <input x-model="form.cnae" :class="fieldClass('cnae')" inputmode="numeric" maxlength="10">
+                            <input x-model="form.cnae" placeholder="Ex.: 1412601" :class="fieldClass('cnae')" inputmode="numeric" maxlength="10">
                         </label>
                         <label>
                             <span class="label">Regime tributário <b class="text-red-600">*</b></span>
@@ -89,7 +95,7 @@
                         <label>
                             <span class="label">Tamanho da empresa</span>
                             <select x-model="form.tamanho_empresa" :class="fieldClass('tamanho_empresa')">
-                                <option value="">Selecione</option>
+                                <option value="">Selecione o porte</option>
                                 <option value="MEI">MEI</option>
                                 <option value="ME">ME</option>
                                 <option value="EPP">EPP</option>
@@ -120,42 +126,42 @@
                         <div class="mt-4 grid gap-x-6 gap-y-5 md:grid-cols-2 xl:grid-cols-4">
                             <label>
                                 <span class="label">CEP <b class="text-red-600">*</b></span>
-                                <input x-model="form.cep" x-mask="99999-999" @input.debounce.500ms="buscarCep" inputmode="numeric" maxlength="9" :class="fieldClass('cep')" required>
+                                <input x-model="form.cep" x-mask="99999-999" @input.debounce.500ms="buscarCep" inputmode="numeric" maxlength="9" placeholder="00000-000" :class="fieldClass('cep')" required>
                                 <p x-show="consultandoCep" class="mt-1 text-xs text-blue-600">Consultando endereço...</p>
                                 <p x-show="fieldError('cep')" class="field-error" x-text="fieldError('cep')"></p>
                             </label>
                             <label>
                                 <span class="label">UF <b class="text-red-600">*</b></span>
-                                <input x-model="form.uf" maxlength="2" :class="fieldClass('uf')" required>
+                                <input x-model="form.uf" maxlength="2" placeholder="SP" :class="fieldClass('uf')" required>
                                 <p x-show="fieldError('uf')" class="field-error" x-text="fieldError('uf')"></p>
                             </label>
                             <label class="xl:col-span-2">
                                 <span class="label">Município <b class="text-red-600">*</b></span>
-                                <input x-model="form.municipio" :class="fieldClass('municipio')" required>
+                                <input x-model="form.municipio" placeholder="Município do endereço fiscal" :class="fieldClass('municipio')" required>
                                 <p x-show="fieldError('municipio')" class="field-error" x-text="fieldError('municipio')"></p>
                             </label>
                             <label>
                                 <span class="label">Bairro <b class="text-red-600">*</b></span>
-                                <input x-model="form.bairro" :class="fieldClass('bairro')" required>
+                                <input x-model="form.bairro" placeholder="Bairro" :class="fieldClass('bairro')" required>
                                 <p x-show="fieldError('bairro')" class="field-error" x-text="fieldError('bairro')"></p>
                             </label>
                             <label class="md:col-span-2">
                                 <span class="label">Endereço <b class="text-red-600">*</b></span>
-                                <input x-model="form.logradouro" :class="fieldClass('logradouro')" required>
+                                <input x-model="form.logradouro" placeholder="Rua, avenida ou estrada" :class="fieldClass('logradouro')" required>
                                 <p x-show="fieldError('logradouro')" class="field-error" x-text="fieldError('logradouro')"></p>
                             </label>
                             <label>
                                 <span class="label">Número <b class="text-red-600">*</b></span>
-                                <input x-model="form.numero" :class="fieldClass('numero')" required>
+                                <input x-model="form.numero" placeholder="Número" :class="fieldClass('numero')" required>
                                 <p x-show="fieldError('numero')" class="field-error" x-text="fieldError('numero')"></p>
                             </label>
                             <label>
                                 <span class="label">Complemento</span>
-                                <input x-model="form.complemento" :class="fieldClass('complemento')">
+                                <input x-model="form.complemento" placeholder="Sala, bloco, galpão, referência..." :class="fieldClass('complemento')">
                             </label>
                             <label>
                                 <span class="label">Código IBGE</span>
-                                <input x-model="form.codigo_municipio_ibge" :class="fieldClass('codigo_municipio_ibge')" inputmode="numeric" maxlength="7">
+                                <input x-model="form.codigo_municipio_ibge" placeholder="Ex.: 3550308" :class="fieldClass('codigo_municipio_ibge')" inputmode="numeric" maxlength="7">
                             </label>
                         </div>
                     </div>
@@ -163,9 +169,9 @@
                     <div class="border-t border-slate-200 pt-7">
                         <h3 class="text-base font-bold text-slate-950">Contato</h3>
                         <div class="mt-4 grid gap-x-6 gap-y-5 md:grid-cols-3">
-                            <label><span class="label">Telefone</span><input x-model="form.telefone" :class="fieldClass('telefone')" inputmode="tel"></label>
-                            <label><span class="label">Celular</span><input x-model="form.celular" :class="fieldClass('celular')" inputmode="tel"></label>
-                            <label><span class="label">E-mail</span><input x-model="form.email" type="email" :class="fieldClass('email')" autocomplete="email"></label>
+                            <label><span class="label">Telefone</span><input x-model="form.telefone" placeholder="(00) 0000-0000" :class="fieldClass('telefone')" inputmode="tel"></label>
+                            <label><span class="label">Celular</span><input x-model="form.celular" placeholder="(00) 00000-0000" :class="fieldClass('celular')" inputmode="tel"></label>
+                            <label><span class="label">E-mail</span><input x-model="form.email" type="email" placeholder="fiscal@empresa.com.br" :class="fieldClass('email')" autocomplete="email"></label>
                         </div>
                     </div>
                 </section>
@@ -191,15 +197,15 @@
                         </div>
                         <label>
                             <span class="label">Série padrão <b class="text-red-600">*</b></span>
-                            <input x-model.number="form.serie_padrao" type="number" min="1" max="999" :class="fieldClass('serie_padrao')" required>
+                            <input x-model.number="form.serie_padrao" type="number" min="1" max="999" placeholder="Ex.: 1" :class="fieldClass('serie_padrao')" required>
                         </label>
                         <label>
                             <span class="label">CFOP padrão <b class="text-red-600">*</b></span>
-                            <input x-model="form.cfop_padrao" inputmode="numeric" maxlength="4" :class="fieldClass('cfop_padrao')" required>
+                            <input x-model="form.cfop_padrao" inputmode="numeric" maxlength="4" placeholder="Ex.: 5901" :class="fieldClass('cfop_padrao')" required>
                         </label>
                         <label>
                             <span class="label">CSOSN/CST padrão</span>
-                            <input x-model="form.csosn_padrao" inputmode="numeric" maxlength="4" :class="fieldClass('csosn_padrao')">
+                            <input x-model="form.csosn_padrao" inputmode="numeric" maxlength="4" placeholder="Ex.: 0400" :class="fieldClass('csosn_padrao')">
                         </label>
                     </div>
 
@@ -227,7 +233,7 @@
                     </div>
                 </section>
 
-                <section x-show="activeTab === 'certificado'" x-cloak class="space-y-8 p-5 sm:p-8">
+                <section x-show="activeTab === 'certificado' && can('certificado.gerenciar')" x-cloak class="space-y-8 p-5 sm:p-8">
                     <div>
                         <p class="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">03 · Identidade digital</p>
                         <h2 class="mt-2 text-xl font-bold text-slate-950">Certificado Digital A1</h2>
@@ -263,7 +269,7 @@
                             </label>
                             <label>
                                 <span class="label">Senha do certificado</span>
-                                <input x-model="form.certificado_senha" type="password" autocomplete="new-password" :class="fieldClass('certificado_senha')">
+                                <input x-model="form.certificado_senha" type="password" autocomplete="new-password" placeholder="Senha do arquivo .pfx/.p12" :class="fieldClass('certificado_senha')">
                                 <p x-show="fieldError('certificado_senha')" class="field-error" x-text="fieldError('certificado_senha')"></p>
                             </label>
                         </div>
@@ -275,13 +281,15 @@
 
                 <div class="flex flex-col justify-between gap-3 border-t border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:px-8">
                     <p class="text-xs text-slate-500" x-show="lastSavedAt" x-text="'Última atualização: ' + lastSavedAt"></p>
-                    <button type="submit" :disabled="saving" class="inline-flex items-center justify-center gap-2 bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto">
-                        <span x-show="saving" class="h-4 w-4 animate-spin border-2 border-white/40 border-t-white"></span>
-                        <span x-text="saving ? 'Salvando configurações...' : 'Salvar configurações'"></span>
-                    </button>
+                    <div class="flex flex-col gap-2 sm:ml-auto sm:flex-row">
+                        <button type="submit" :disabled="saving" class="inline-flex items-center justify-center gap-2 bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+                            <span x-show="saving" class="h-4 w-4 animate-spin border-2 border-white/40 border-t-white"></span>
+                            <span x-text="saving ? 'Salvando configurações...' : 'Salvar configurações'"></span>
+                        </button>
+                    </div>
                 </div>
-            </form>
-        </div>
+            </div>
+        </form>
     </div>
 
     <script>
@@ -300,7 +308,7 @@
                 tabs: [
                     { id: 'empresa', number: '01', label: 'Dados da empresa' },
                     { id: 'emissao', number: '02', label: 'Emissão e ambiente' },
-                    { id: 'certificado', number: '03', label: 'Certificado Digital' },
+                    { id: 'certificado', number: '03', label: 'Certificado Digital', permission: 'certificado.gerenciar' },
                 ],
                 communication: {
                     loading: false,
@@ -349,6 +357,7 @@
                     }
 
                     this.initialized = true;
+                    this.activeTab = this.visibleTabs()[0]?.id || 'empresa';
                     this.carregar();
                 },
                 headers() {
@@ -356,6 +365,21 @@
                         Authorization: 'Bearer ' + localStorage.getItem('nfe_token'),
                         Accept: 'application/json',
                     };
+                },
+                can(permission) {
+                    if (!permission) {
+                        return true;
+                    }
+
+                    const user = JSON.parse(localStorage.getItem('nfe_user') || '{}');
+
+                    return !Array.isArray(user.permissions) || user.permissions.includes(permission);
+                },
+                visibleTabs() {
+                    return this.tabs.filter((tab) => this.can(tab.permission));
+                },
+                activeTabLabel() {
+                    return this.visibleTabs().find((tab) => tab.id === this.activeTab)?.label || 'Configurações';
                 },
                 fieldClass(field) {
                     return this.errors[field] ? 'field border-red-500 focus:border-red-500 focus:ring-red-100' : 'field';

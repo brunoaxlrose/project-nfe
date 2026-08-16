@@ -10,13 +10,17 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateJwt
 {
-    public function __construct(private readonly JwtService $jwt) {}
+    public function __construct(private readonly JwtService $jwt)
+    {
+    }
 
     public function handle(Request $request, Closure $next): Response
     {
         $header = (string) $request->header('Authorization');
         if (!preg_match('/^Bearer\s+([^\s]+)$/i', $header, $matches)) {
-            return response()->json(['message' => 'Bearer token obrigatório.'], 401);
+            return response()->json([
+                'message' => 'Sua sessão não foi encontrada. Entre novamente para continuar.',
+            ], 401);
         }
         try {
             $user = $this->jwt->userFromToken($matches[1]);

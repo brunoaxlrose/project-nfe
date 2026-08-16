@@ -37,7 +37,7 @@ class NaturezaOperacaoSeeder extends Seeder
 
     public function run(): void
     {
-        Empresa::query()->select('id')->orderBy('id')->each(function (Empresa $empresa): void {
+        Empresa::query()->select('id_empresa')->orderBy('id_empresa')->each(function (Empresa $empresa): void {
             $this->seedEmpresa($empresa->id);
         });
     }
@@ -46,7 +46,7 @@ class NaturezaOperacaoSeeder extends Seeder
     {
         foreach (self::PADROES as $padrao) {
             NaturezaOperacao::withoutGlobalScopes()->updateOrCreate(
-                ['empresa_id' => $empresaId, 'nome' => $padrao['descricao']],
+                ['id_empresa' => $empresaId, 'nome' => $padrao['descricao']],
                 [
                     'tipo_movimento' => $padrao['tipo_movimento'],
                     'cfop_padrao' => $padrao['cfop_padrao'],
@@ -65,7 +65,7 @@ class NaturezaOperacaoSeeder extends Seeder
 
         // Mantém disponível a operação de industrialização já utilizada pelo FiscalFlow.
         NaturezaOperacao::withoutGlobalScopes()->updateOrCreate(
-            ['empresa_id' => $empresaId, 'nome' => 'Remessa de Mercadoria para Industrialização'],
+            ['id_empresa' => $empresaId, 'nome' => 'Remessa de Mercadoria para Industrialização'],
             [
                 'tipo_movimento' => 'Saída',
                 'cfop_padrao' => '5901',

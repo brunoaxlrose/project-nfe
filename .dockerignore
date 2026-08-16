@@ -2,5 +2,8 @@
 .env
 secrets
 storage/app/nfe
+storage/app/certificados
+docker-compose.yml
+docker-compose.override.yml
 vendor
 node_modules

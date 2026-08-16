@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 
 class NfeController extends Controller
 {
@@ -27,11 +28,16 @@ class NfeController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $empresaId = (int) $request->user()->id_empresa;
         $payload = $request->validate([
             'numero' => ['required', 'integer', 'min:1', 'max:999999999'],
             'serie' => ['sometimes', 'integer', 'min:1', 'max:999'],
             'natureza_operacao' => ['nullable', 'string', 'max:60'],
-            'natureza_operacao_id' => ['required', 'integer', 'exists:naturezas_operacao,id'],
+            'id_natureza_operacao' => [
+                'required',
+                'integer',
+                Rule::exists('natureza_operacao', 'id_natureza_operacao')->where('id_empresa', $empresaId),
+            ],
             'tipo_saida' => ['nullable', 'in:propria,terceiros'],
             'data_emissao' => ['nullable', 'date'],
             'hora_emissao' => ['nullable', 'date_format:H:i'],
@@ -40,8 +46,16 @@ class NfeController extends Controller
             'finalidade' => ['nullable', 'in:1,2,3,4'],
             'ind_pres' => ['nullable', 'integer', 'between:0,9'],
             'consumidor_final' => ['nullable', 'boolean'],
-            'destinatario_id' => ['nullable', 'integer', 'exists:destinatarios,id'],
-            'cliente_id' => ['nullable', 'integer', 'exists:clientes,id'],
+            'id_destinatario' => [
+                'nullable',
+                'integer',
+                Rule::exists('destinatario', 'id_destinatario')->where('id_empresa', $empresaId),
+            ],
+            'id_cliente' => [
+                'nullable',
+                'integer',
+                Rule::exists('cliente', 'id_cliente')->where('id_empresa', $empresaId),
+            ],
             'destinatario' => ['nullable', 'array'],
             'destinatario.nome' => ['nullable', 'string', 'max:60'],
             'destinatario.cnpj' => ['nullable', 'digits:14'],
@@ -91,8 +105,8 @@ class NfeController extends Controller
             'informacoes_complementares' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        if (empty($payload['cliente_id']) && empty($payload['destinatario_id'])) {
-            throw ValidationException::withMessages(['cliente_id' => 'Selecione um cliente ou destinatário cadastrado.']);
+        if (empty($payload['id_cliente']) && empty($payload['id_destinatario'])) {
+            throw ValidationException::withMessages(['id_cliente' => 'Selecione um cliente ou destinatário cadastrado.']);
         }
         try {
             $nfe = $this->emitter->emit($payload, $request->user()->id);
@@ -106,8 +120,8 @@ class NfeController extends Controller
         } catch (\Throwable $exception) {
             Log::error('Falha inesperada no endpoint de emissão de NF-e.', [
                 'exception' => $exception,
-                'usuario_id' => $request->user()?->id,
-                'empresa_id' => $request->user()?->empresa_id,
+                'id_usuario' => $request->user()?->id,
+                'id_empresa' => $request->user()?->id_empresa,
             ]);
 
             return response()->json([
@@ -135,7 +149,7 @@ class NfeController extends Controller
             Log::error('Falha inesperada na consulta do recibo da NF-e.', [
                 'exception' => $exception,
                 'nfe_id' => $nfe->id,
-                'usuario_id' => $request->user()?->id,
+                'id_usuario' => $request->user()?->id,
             ]);
 
             return response()->json([
