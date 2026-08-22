@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ArrowRight, Check, Eye, EyeOff, LockKeyhole, ShieldCheck, Sparkles } from '@lucide/vue'
 import { useAuthStore } from '../stores/auth'
 import { apiError } from '../services/api'
 
-const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const showPassword = ref(false)
@@ -13,11 +12,12 @@ const errorMessage = ref(sessionStorage.getItem('auth_message') || '')
 sessionStorage.removeItem('auth_message')
 const errors = ref<Record<string, string[]>>({})
 const form = reactive({ email: '', password: '' })
+
 async function submit() {
   errorMessage.value = ''; errors.value = {}
   try {
     await auth.login({ email: form.email, password: form.password })
-    await router.replace(sessionStorage.getItem('subscription_blocked') === '1' ? '/pagamento' : String(route.query.redirect || '/dashboard'))
+    await router.replace(sessionStorage.getItem('subscription_blocked') === '1' ? '/pagamento' : '/dashboard')
   } catch (error) {
     const parsed = apiError(error); errorMessage.value = parsed.message; errors.value = parsed.errors
   }

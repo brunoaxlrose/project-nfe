@@ -19,17 +19,18 @@ function numeric(value: unknown): number {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0
 }
 
+function cents(value: unknown): number {
+  const rawDigits = String(value ?? '').replace(/\D/g, '')
+  if (!rawDigits) return 0
+  return Number(rawDigits) / 100
+}
+
 function format(value: unknown): string {
   return numeric(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function sanitize(value: string): string {
-  const cleaned = value.replace(/[^\d,.]/g, '')
-  const separator = Math.max(cleaned.lastIndexOf(','), cleaned.lastIndexOf('.'))
-  if (separator < 0) return cleaned.replace(/\D/g, '')
-  const integer = cleaned.slice(0, separator).replace(/\D/g, '') || '0'
-  const decimals = cleaned.slice(separator + 1).replace(/\D/g, '').slice(0, 2)
-  return `${integer},${decimals}`
+  return format(cents(value))
 }
 
 function onInput(event: Event) {
@@ -37,6 +38,7 @@ function onInput(event: Event) {
   display.value = sanitize(element.value)
   element.value = display.value
   emit('update:modelValue', numeric(display.value))
+  requestAnimationFrame(() => element.setSelectionRange(element.value.length, element.value.length))
 }
 
 async function onFocus() {

@@ -7,6 +7,7 @@ use App\Models\Plano;
 use App\Models\User;
 use App\Services\AssinaturaService;
 use App\Services\AsaasService;
+use App\Services\EmpresaAccessService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +24,7 @@ class PixPagamentoController extends Controller
     public function __construct(
         private readonly AsaasService $asaas,
         private readonly AssinaturaService $assinaturas,
+        private readonly EmpresaAccessService $empresaAccess,
     ) {}
 
     public function options(Request $request): JsonResponse
@@ -34,8 +36,11 @@ class PixPagamentoController extends Controller
         $planoAtual = $assinatura?->plano;
         $planoRenovacao = $this->renewalPlan();
         $valorPix = number_format((float) $planoRenovacao->valor_mensal, 2, '.', '');
+        $bloqueio = $this->empresaAccess->bloqueio($request->user());
 
         return response()->json([
+            'bloqueada' => $bloqueio !== null,
+            'motivo_bloqueio' => $bloqueio,
             'empresa' => [
                 'id' => $empresa->id_empresa,
                 'razao_social' => $empresa->razao_social,

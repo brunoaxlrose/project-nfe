@@ -22,7 +22,7 @@ const configs: Record<Entity, Config> = {
   fornecedores: { title: 'Fornecedores', singular: 'fornecedor', description: 'Centralize parceiros e dados cadastrais de compra.', endpoint: '/fornecedores', permission: 'fornecedores', nameKey: 'nome_razao_social', defaults: { ativo: true }, columns: [{ key: 'nome_razao_social', label: 'Razão social' }, { key: 'documento', label: 'CPF / CNPJ', format: 'document' }, { key: 'municipio', label: 'Cidade / UF' }, { key: 'ativo', label: 'Status', format: 'status' }], fields: [
     { key: 'nome_razao_social', label: 'Razão social / Nome', required: true, span: 2 }, { key: 'documento', label: 'CPF ou CNPJ', required: true }, { key: 'inscricao_estadual', label: 'Inscrição estadual' }, { key: 'cep', label: 'CEP' }, { key: 'logradouro', label: 'Logradouro', span: 2 }, { key: 'numero', label: 'Número' }, { key: 'complemento', label: 'Complemento' }, { key: 'bairro', label: 'Bairro' }, { key: 'municipio', label: 'Município' }, { key: 'codigo_municipio_ibge', label: 'Código IBGE' }, { key: 'uf', label: 'UF' }, { key: 'ativo', label: 'Cadastro ativo', type: 'checkbox', span: 2 },
   ] },
-  produtos: { title: 'Produtos', singular: 'produto', description: 'Mantenha preços e classificações fiscais consistentes.', endpoint: '/produtos', permission: 'produtos', nameKey: 'descricao', defaults: { ativo: true, unidade: 'UN' }, columns: [{ key: 'codigo', label: 'Código' }, { key: 'descricao', label: 'Descrição' }, { key: 'ncm', label: 'NCM' }, { key: 'valor_unitario', label: 'Valor', format: 'currency' }, { key: 'ativo', label: 'Status', format: 'status' }], fields: [
+  produtos: { title: 'Produtos', singular: 'produto', description: 'Mantenha preços e classificações fiscais consistentes.', endpoint: '/produtos', permission: 'produtos', nameKey: 'descricao', defaults: { ativo: true, unidade: 'UN', valor_unitario: 0 }, columns: [{ key: 'codigo', label: 'Código' }, { key: 'descricao', label: 'Descrição' }, { key: 'ncm', label: 'NCM' }, { key: 'valor_unitario', label: 'Valor', format: 'currency' }, { key: 'ativo', label: 'Status', format: 'status' }], fields: [
     { key: 'codigo', label: 'Código interno', required: true, placeholder: 'Ex.: PROD-001' }, { key: 'descricao', label: 'Descrição', required: true, span: 2, placeholder: 'Ex.: Camiseta algodão branca' }, { key: 'ncm', label: 'NCM', required: true, placeholder: '8 dígitos' }, { key: 'valor_unitario', label: 'Valor unitário', type: 'currency', required: true, placeholder: '0,00' }, { key: 'unidade', label: 'Unidade', required: true, placeholder: 'Ex.: UN, PC, KG' }, { key: 'cfop', label: 'CFOP padrão', placeholder: '4 dígitos' }, { key: 'csosn', label: 'CSOSN', placeholder: 'Ex.: 0400' }, { key: 'cst', label: 'CST', placeholder: 'Ex.: 00' }, { key: 'ativo', label: 'Produto ativo', type: 'checkbox', span: 2 },
   ] },
   naturezas: { title: 'Naturezas de operação', singular: 'natureza', description: 'Configure regras fiscais reutilizáveis para emissão.', endpoint: '/naturezas-operacao', permission: 'naturezas', nameKey: 'nome', defaults: { ativa: true, tipo_movimento: 'Saída', calcula_impostos: false, calcula_icms: false, calcula_ipi: false, calcula_pis: false, calcula_cofins: false }, columns: [{ key: 'nome', label: 'Natureza' }, { key: 'tipo_movimento', label: 'Movimento' }, { key: 'cfop_padrao', label: 'CFOP' }, { key: 'ativa', label: 'Status', format: 'status' }], fields: [
@@ -44,9 +44,249 @@ const confirmOpen = ref(false)
 const selected = ref<Record<string, any> | null>(null)
 const form = reactive<Record<string, any>>({})
 const errors = ref<Record<string, string[]>>({})
+const cepLoading = ref(false)
+const cepMessage = ref('')
+const documentLoading = ref(false)
+const documentMessage = ref('')
 let debounce: number | undefined
+let cepDebounce: number | undefined
+let cepLookupToken = 0
+let documentDebounce: number | undefined
+let documentLookupToken = 0
+
+function digits(value: unknown, max?: number): string {
+  const onlyDigits = String(value ?? '').replace(/\D/g, '')
+  return max ? onlyDigits.slice(0, max) : onlyDigits
+}
+
+function maskDocument(value: unknown): string {
+  const valueDigits = digits(value, 14)
+  if (valueDigits.length <= 11) {
+    return valueDigits
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4')
+  }
+  return valueDigits
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/(\d{2})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3/$4')
+    .replace(/(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, '$1.$2.$3/$4-$5')
+}
+
+function maskCep(value: unknown): string {
+  return digits(value, 8).replace(/(\d{5})(\d)/, '$1-$2')
+}
+
+function isValidCnpj(value: unknown): boolean {
+  const cnpj = digits(value, 14)
+  if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false
+
+  const calculate = (base: string, weights: number[]) => {
+    const sum = weights.reduce((total, weight, index) => total + Number(base[index]) * weight, 0)
+    const remainder = sum % 11
+    return remainder < 2 ? 0 : 11 - remainder
+  }
+
+  return calculate(cnpj.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === Number(cnpj[12])
+    && calculate(cnpj.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === Number(cnpj[13])
+}
+
+function normalizeTextValue(key: string, value: unknown): string {
+  if (key === 'documento') return maskDocument(value)
+  if (key === 'cep') return maskCep(value)
+  if (key === 'uf') return String(value ?? '').replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase()
+  if (key === 'unidade') return String(value ?? '').trimStart().slice(0, 6).toUpperCase()
+  if (['codigo_ibge', 'codigo_municipio_ibge'].includes(key)) return digits(value, 7)
+  if (['ncm'].includes(key)) return digits(value, 8)
+  if (['cfop', 'cfop_padrao', 'csosn', 'csosn_padrao'].includes(key)) return digits(value, 4)
+  if (['cst', 'cst_padrao'].includes(key)) return digits(value, 3)
+  return String(value ?? '')
+}
+
+function inputAttrs(field: Field): Record<string, string> {
+  const attrs: Record<string, string> = {}
+  if (['documento', 'cep', 'codigo_ibge', 'codigo_municipio_ibge', 'ncm', 'cfop', 'cfop_padrao', 'csosn', 'csosn_padrao', 'cst', 'cst_padrao'].includes(field.key)) attrs.inputmode = 'numeric'
+  if (field.key === 'documento') attrs.maxlength = '18'
+  if (field.key === 'cep') attrs.maxlength = '9'
+  if (field.key === 'uf') attrs.maxlength = '2'
+  if (['codigo_ibge', 'codigo_municipio_ibge'].includes(field.key)) attrs.maxlength = '7'
+  if (field.key === 'ncm') attrs.maxlength = '8'
+  if (['cfop', 'cfop_padrao', 'csosn', 'csosn_padrao'].includes(field.key)) attrs.maxlength = '4'
+  if (['cst', 'cst_padrao'].includes(field.key)) attrs.maxlength = '3'
+  return attrs
+}
+
+function inputValue(field: Field): string {
+  return normalizeTextValue(field.key, form[field.key])
+}
+
+function handleInput(field: Field, event: Event) {
+  const element = event.target as HTMLInputElement
+  const value = normalizeTextValue(field.key, element.value)
+  form[field.key] = value
+  element.value = value
+  if (errors.value[field.key]) delete errors.value[field.key]
+  if (field.key === 'documento') scheduleDocumentLookup(value)
+  if (field.key === 'cep') scheduleCepLookup(value)
+}
+
+function canLookupCep(): boolean {
+  return props.entity === 'clientes' || props.entity === 'fornecedores'
+}
+
+function canLookupDocument(): boolean {
+  return props.entity === 'clientes' || props.entity === 'fornecedores'
+}
+
+function scheduleDocumentLookup(value: unknown) {
+  window.clearTimeout(documentDebounce)
+  documentMessage.value = ''
+  if (!canLookupDocument()) return
+
+  const document = digits(value)
+  if (document.length < 14) {
+    documentLoading.value = false
+    return
+  }
+
+  if (!isValidCnpj(document)) {
+    documentLoading.value = false
+    errors.value = { ...errors.value, documento: ['Informe um CNPJ válido.'] }
+    return
+  }
+
+  documentDebounce = window.setTimeout(() => lookupCnpj(document), 450)
+}
+
+async function lookupCnpj(cnpj: string) {
+  const token = ++documentLookupToken
+  documentLoading.value = true
+  documentMessage.value = 'Consultando CNPJ...'
+
+  try {
+    const { data } = await api.get(`/cnpj/${cnpj}`)
+    if (token !== documentLookupToken) return
+
+    const nameKey = props.entity === 'clientes' ? 'razao_social' : 'nome_razao_social'
+    const cityKey = props.entity === 'clientes' ? 'cidade' : 'municipio'
+    const ibgeKey = props.entity === 'clientes' ? 'codigo_ibge' : 'codigo_municipio_ibge'
+
+    form[nameKey] = data.razao_social || data.nome_fantasia || form[nameKey] || ''
+    form.cep = maskCep(data.cep || form.cep)
+    form.logradouro = data.logradouro || form.logradouro || ''
+    form.numero = data.numero || form.numero || ''
+    form.complemento = data.complemento || form.complemento || ''
+    form.bairro = data.bairro || form.bairro || ''
+    form[cityKey] = data.municipio || form[cityKey] || ''
+    form[ibgeKey] = digits(data.codigo_ibge, 7) || form[ibgeKey] || ''
+    form.uf = normalizeTextValue('uf', data.uf || form.uf)
+
+    delete errors.value.documento
+    documentMessage.value = 'Dados preenchidos pelo CNPJ.'
+  } catch (error) {
+    if (token !== documentLookupToken) return
+    const parsed = apiError(error)
+    errors.value = { ...errors.value, documento: [parsed.message || 'CNPJ não encontrado na BrasilAPI.'] }
+    documentMessage.value = ''
+  } finally {
+    if (token === documentLookupToken) documentLoading.value = false
+  }
+}
+
+function scheduleCepLookup(value: unknown) {
+  window.clearTimeout(cepDebounce)
+  cepMessage.value = ''
+  if (!canLookupCep()) return
+
+  const cep = digits(value)
+  if (cep.length !== 8) {
+    cepLoading.value = false
+    return
+  }
+
+  cepDebounce = window.setTimeout(() => lookupCep(cep), 450)
+}
+
+async function lookupCep(cep: string) {
+  const token = ++cepLookupToken
+  cepLoading.value = true
+  cepMessage.value = 'Consultando CEP...'
+
+  try {
+    const { data } = await api.get(`/cep/${cep}`)
+    if (token !== cepLookupToken) return
+
+    const cityKey = props.entity === 'clientes' ? 'cidade' : 'municipio'
+    const ibgeKey = props.entity === 'clientes' ? 'codigo_ibge' : 'codigo_municipio_ibge'
+    form.cep = maskCep(data.cep || cep)
+    form.logradouro = data.logradouro || ''
+    form.bairro = data.bairro || ''
+    form[cityKey] = data.municipio || ''
+    form[ibgeKey] = digits(data.codigo_ibge, 7)
+    form.uf = normalizeTextValue('uf', data.uf)
+    delete errors.value.cep
+    cepMessage.value = 'Endereço preenchido pelo CEP.'
+  } catch (error) {
+    if (token !== cepLookupToken) return
+    const parsed = apiError(error)
+    errors.value = { ...errors.value, cep: [parsed.message || 'CEP não encontrado.'] }
+    cepMessage.value = ''
+  } finally {
+    if (token === cepLookupToken) cepLoading.value = false
+  }
+}
+
+function normalizedPayload(): Record<string, any> {
+  const payload: Record<string, any> = { ...form }
+  for (const key of ['documento', 'cep', 'codigo_ibge', 'codigo_municipio_ibge', 'ncm', 'cfop', 'cfop_padrao', 'csosn', 'csosn_padrao', 'cst', 'cst_padrao']) {
+    if (key in payload) payload[key] = digits(payload[key]) || null
+  }
+  if ('uf' in payload) payload.uf = normalizeTextValue('uf', payload.uf) || null
+  if ('unidade' in payload) payload.unidade = normalizeTextValue('unidade', payload.unidade)
+  return payload
+}
+
+function validateFront(): boolean {
+  const localErrors: Record<string, string[]> = {}
+  for (const field of config.value.fields) {
+    const value = form[field.key]
+    const empty = field.type === 'currency' ? value === '' || value === null || value === undefined : String(value ?? '').trim() === ''
+    if (field.required && empty) localErrors[field.key] = [`O campo ${field.label.toLowerCase()} é obrigatório.`]
+  }
+
+  const documento = digits(form.documento)
+  if (documento && ![11, 14].includes(documento.length)) localErrors.documento = ['Informe um CPF com 11 números ou CNPJ com 14 números.']
+  if (documento.length === 14 && !isValidCnpj(documento)) localErrors.documento = ['Informe um CNPJ válido.']
+  const cep = digits(form.cep)
+  if (cep && cep.length !== 8) localErrors.cep = ['Informe um CEP válido com 8 números.']
+  const uf = normalizeTextValue('uf', form.uf)
+  if (uf && uf.length !== 2) localErrors.uf = ['Informe a UF com 2 letras.']
+  const codigoIbge = digits(form.codigo_ibge || form.codigo_municipio_ibge)
+  if (codigoIbge && codigoIbge.length !== 7) {
+    const key = 'codigo_ibge' in form ? 'codigo_ibge' : 'codigo_municipio_ibge'
+    localErrors[key] = ['Informe o código IBGE com 7 números.']
+  }
+  const ncm = digits(form.ncm)
+  if (ncm && ncm.length !== 8) localErrors.ncm = ['Informe o NCM com 8 números.']
+  if ('valor_unitario' in form && Number(form.valor_unitario || 0) <= 0) localErrors.valor_unitario = ['Informe um valor unitário maior que zero.']
+  const cfop = digits(form.cfop || form.cfop_padrao)
+  if (cfop && cfop.length !== 4) {
+    const key = 'cfop' in form ? 'cfop' : 'cfop_padrao'
+    localErrors[key] = ['Informe o CFOP com 4 números.']
+  }
+
+  errors.value = localErrors
+  return Object.keys(localErrors).length === 0
+}
 
 function resetForm(row?: Record<string, any>) {
+  window.clearTimeout(cepDebounce)
+  window.clearTimeout(documentDebounce)
+  cepLoading.value = false
+  cepMessage.value = ''
+  documentLoading.value = false
+  documentMessage.value = ''
   Object.keys(form).forEach((key) => delete form[key])
   Object.assign(form, config.value.defaults, row || {})
   errors.value = {}; selected.value = row || null; modalOpen.value = true
@@ -74,9 +314,15 @@ async function load() {
   } catch (error) { toast.show('error', apiError(error).message) } finally { loading.value = false }
 }
 async function save() {
-  saving.value = true; errors.value = {}
+  errors.value = {}
+  if (!validateFront()) {
+    toast.show('error', 'Revise os campos destacados antes de salvar.')
+    return
+  }
+  saving.value = true
   try {
-    const response = selected.value ? await api.put(`${config.value.endpoint}/${selected.value.id}`, form) : await api.post(config.value.endpoint, form)
+    const payload = normalizedPayload()
+    const response = selected.value ? await api.put(`${config.value.endpoint}/${selected.value.id}`, payload) : await api.post(config.value.endpoint, payload)
     toast.show('success', response.data.message || `${config.value.singular} salvo com sucesso.`)
     modalOpen.value = false; await load()
   } catch (error) { const parsed = apiError(error); errors.value = parsed.errors; toast.show('error', parsed.message) } finally { saving.value = false }
@@ -113,7 +359,7 @@ onMounted(load)
       <form id="catalog-form" class="modal-form-grid" @submit.prevent="save">
         <label v-for="field in config.fields" :key="field.key" :class="{ 'field-span-2': field.span === 2, 'checkbox-field': field.type === 'checkbox' }">
           <template v-if="field.type === 'checkbox'"><input v-model="form[field.key]" type="checkbox"><span>{{ field.label }}</span></template>
-          <template v-else><span>{{ field.label }} <b v-if="field.required">*</b></span><select v-if="field.type === 'select'" v-model="form[field.key]"><option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option></select><textarea v-else-if="field.type === 'textarea'" v-model="form[field.key]" rows="3" :placeholder="field.placeholder || `Informe ${field.label.toLowerCase()}`" /><CurrencyInput v-else-if="field.type === 'currency'" v-model="form[field.key]" :placeholder="field.placeholder" /><input v-else v-model="form[field.key]" :type="field.type || 'text'" :placeholder="field.placeholder || `Informe ${field.label.toLowerCase()}`"><small v-if="errors[field.key]">{{ errors[field.key][0] }}</small></template>
+          <template v-else><span>{{ field.label }} <b v-if="field.required">*</b></span><select v-if="field.type === 'select'" v-model="form[field.key]"><option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option></select><textarea v-else-if="field.type === 'textarea'" v-model="form[field.key]" rows="3" :placeholder="field.placeholder || `Informe ${field.label.toLowerCase()}`" /><CurrencyInput v-else-if="field.type === 'currency'" v-model="form[field.key]" :placeholder="field.placeholder" /><input v-else :value="inputValue(field)" :type="field.type || 'text'" v-bind="inputAttrs(field)" :placeholder="field.placeholder || `Informe ${field.label.toLowerCase()}`" autocomplete="off" @input="handleInput(field, $event)"><small v-if="errors[field.key]">{{ errors[field.key][0] }}</small><small v-else-if="field.key === 'documento' && documentMessage" class="field-hint">{{ documentMessage }}</small><small v-else-if="field.key === 'cep' && cepMessage" class="field-hint">{{ cepMessage }}</small></template>
         </label>
       </form>
       <template #footer><button class="button button--ghost" :disabled="saving" @click="modalOpen = false">Cancelar</button><button class="button button--primary" form="catalog-form" :disabled="saving">{{ saving ? 'Salvando…' : 'Salvar cadastro' }}</button></template>

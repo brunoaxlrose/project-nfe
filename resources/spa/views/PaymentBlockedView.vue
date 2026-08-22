@@ -31,6 +31,11 @@ async function load() {
   loading.value = true
   try {
     const { data } = await api.get('/pagamentos/opcoes')
+    if (data.bloqueada === false) {
+      sessionStorage.removeItem('subscription_blocked')
+      await router.replace('/dashboard')
+      return
+    }
     empresa.value = data.empresa
     assinatura.value = data.assinatura
     planoAtual.value = data.plano_atual
@@ -118,7 +123,7 @@ onMounted(load)
           <template v-else>
             <header>
               <span><CreditCard :size="20" /></span>
-              <div><h2>Renovação por Pix</h2><p>Valor fixo de homologação: {{ money(valorPix) }}</p></div>
+              <div><h2>Renovação por Pix</h2><p>Valor do plano: {{ money(valorPix) }}</p></div>
             </header>
 
             <div class="payment-plan-list">

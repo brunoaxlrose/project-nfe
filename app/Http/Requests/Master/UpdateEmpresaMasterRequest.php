@@ -22,4 +22,21 @@ class UpdateEmpresaMasterRequest extends FormRequest
             'observacoes' => ['nullable', 'string', 'max:2000'],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'razao_social.required' => 'Informe a razão social da empresa.',
+            'ativa.required' => 'Informe se a empresa está ativa na plataforma.',
+            'id_plano.required' => 'Selecione o plano da empresa.',
+            'status.required' => 'Selecione o status da assinatura.',
+            'inicia_em.required' => 'Informe o início da vigência.',
+            'inicia_em.date' => 'Informe uma data válida para o início da vigência.',
+            'termina_em.required_with' => 'Informe o fim da vigência quando houver carência.',
+            'termina_em.date' => 'Informe uma data válida para o fim da vigência.',
+            'termina_em.after' => 'O fim da vigência deve ser posterior ao início.',
+            'carencia_ate.date' => 'Informe uma data válida para a carência.',
+            'carencia_ate.after_or_equal' => 'A carência deve ser igual ou posterior ao fim da vigência.',
+        ];
+    }
 }

@@ -10,6 +10,8 @@ use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\MasterController;
 use App\Http\Controllers\MinhaAssinaturaController;
 use App\Http\Controllers\PixPagamentoController;
+use App\Http\Controllers\CepController;
+use App\Http\Controllers\CnpjController;
 use App\Http\Controllers\Api\ClienteController;
 use App\Http\Controllers\Api\FornecedorController;
 use App\Http\Controllers\Api\NaturezaOperacaoController;
@@ -88,6 +90,8 @@ Route::middleware(['jwt', 'subscription', 'json.payload'])->group(function (): v
 
 Route::middleware(['jwt', 'subscription'])->group(function (): void {
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::get('/cep/{cep}', [CepController::class, 'show'])->where('cep', '[0-9.-]+')->middleware('throttle:30,1');
+    Route::get('/cnpj/{cnpj}', [CnpjController::class, 'show'])->where('cnpj', '[0-9.\/-]+')->middleware('throttle:30,1');
     Route::get('/minha-assinatura', [MinhaAssinaturaController::class, 'show']);
     Route::get('/configuracoes-emissor', [EmpresaConfiguracaoController::class, 'show'])->middleware('permission:configuracoes.visualizar');
     Route::post('/configuracoes-emissor', [EmpresaConfiguracaoController::class, 'update'])->middleware('permission:configuracoes.editar');

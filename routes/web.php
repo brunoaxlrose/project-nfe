@@ -4,6 +4,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::view('/login', 'spa')->name('login');
 Route::view('/pagamento', 'spa')->name('pagamento');
+Route::get('/403', fn () => response()->view('spa', [], 403))->name('forbidden');
+Route::get('/404', fn () => response()->view('spa', [], 404))->name('not-found');
 // Cadastro público de empresas desativado.
 // Route::view('/register', 'spa')->name('register');
 Route::view('/', 'spa');
@@ -22,3 +24,5 @@ Route::view('/dashboard/produtos', 'spa')->name('produtos.index');
 Route::view('/dashboard/{path?}', 'spa')
     ->where('path', '.*')
     ->name('spa.dashboard');
+
+Route::fallback(fn () => response()->view('spa', [], 404));

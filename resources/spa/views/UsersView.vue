@@ -70,12 +70,12 @@ onMounted(load)
     </section>
     <BaseModal :open="modalOpen" :title="selected ? 'Editar usuário' : 'Novo usuário'" description="Defina o perfil principal e, se necessário, acessos adicionais." wide @close="modalOpen = false">
       <form id="user-form" class="modal-form-grid" @submit.prevent="save">
-        <label><span>Nome completo *</span><input v-model="form.nome" autocomplete="name"><small v-if="errors.nome">{{ errors.nome[0] }}</small></label>
-        <label><span>E-mail *</span><input v-model="form.email" type="email" autocomplete="email"><small v-if="errors.email">{{ errors.email[0] }}</small></label>
+        <label><span>Nome completo *</span><input v-model="form.nome" autocomplete="name" placeholder="Ex.: Bruno Oliveira"><small v-if="errors.nome">{{ errors.nome[0] }}</small></label>
+        <label><span>E-mail *</span><input v-model="form.email" type="email" autocomplete="email" placeholder="usuario@empresa.com.br"><small v-if="errors.email">{{ errors.email[0] }}</small></label>
         <label v-if="!selected" class="checkbox-field field-span-2 copy-access-field"><input v-model="form.copiar_minhas_permissoes" type="checkbox"><span><strong>Usar os mesmos acessos do meu usuário</strong><small>O novo usuário receberá seu perfil e suas permissões adicionais, sempre limitado aos módulos do plano.</small></span></label>
         <label v-if="selected || !form.copiar_minhas_permissoes" class="field-span-2"><span>Perfil de acesso *</span><select v-model="form.id_perfil"><option :value="null" disabled>Selecione um perfil</option><option v-for="profile in profiles" :key="profile.id" :value="profile.id">{{ profile.nome }}</option></select><small v-if="errors.id_perfil">{{ errors.id_perfil[0] }}</small></label>
-        <label><span>{{ selected ? 'Nova senha (opcional)' : 'Senha temporária *' }}</span><input v-model="form.password" type="password" autocomplete="new-password"><small v-if="errors.password">{{ errors.password[0] }}</small></label>
-        <label><span>Confirme a senha</span><input v-model="form.password_confirmation" type="password" autocomplete="new-password"></label>
+        <label><span>{{ selected ? 'Nova senha (opcional)' : 'Senha temporária *' }}</span><input v-model="form.password" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"><small v-if="errors.password">{{ errors.password[0] }}</small></label>
+        <label><span>Confirme a senha</span><input v-model="form.password_confirmation" type="password" autocomplete="new-password" placeholder="Repita a senha"></label>
         <label class="checkbox-field field-span-2"><input v-model="form.ativo" type="checkbox"><span>Usuário ativo e autorizado a entrar</span></label>
       </form>
       <template #footer><button class="button button--ghost" @click="modalOpen = false">Cancelar</button><button form="user-form" class="button button--primary" :disabled="saving">{{ saving ? 'Salvando…' : 'Salvar usuário' }}</button></template>
