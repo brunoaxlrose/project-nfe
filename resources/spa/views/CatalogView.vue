@@ -264,7 +264,7 @@ function formSnapshot(): string {
 }
 
 function closeModal(force = false) {
-  if (saving.value) return
+  if (saving.value && !force) return
   if (!force && formSnapshot() !== initialFormSnapshot.value) {
     discardConfirmOpen.value = true
     return
