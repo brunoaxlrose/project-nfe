@@ -6,6 +6,7 @@ use App\Models\Concerns\UsesCorporateNaming;
 use App\Traits\Tenantable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -88,6 +89,11 @@ class User extends Authenticatable
             'id_usuario',
             'id_permissao',
         );
+    }
+
+    public function acessos(): HasMany
+    {
+        return $this->hasMany(UsuarioAcesso::class, 'id_usuario', 'id_usuario');
     }
 
     public function temPermissao(string $slug): bool

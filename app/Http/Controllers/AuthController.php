@@ -4,10 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\LoginRequest;
 use App\Models\User;
+use App\Models\UsuarioAcesso;
 use App\Services\JwtService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class AuthController extends Controller
 {
@@ -31,6 +34,16 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'Seu perfil de acesso ainda não foi configurado. Procure o administrador do sistema.',
             ], 403);
+        }
+
+        try {
+            UsuarioAcesso::registrar($user, $request);
+        } catch (Throwable $exception) {
+            // Uma indisponibilidade momentânea da auditoria não deve impedir o login.
+            Log::warning('Não foi possível registrar o acesso do usuário.', [
+                'id_usuario' => $user->id_usuario,
+                'exception' => $exception,
+            ]);
         }
 
         return response()->json([
