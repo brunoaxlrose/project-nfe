@@ -75,6 +75,7 @@ final class NfeEmissionService
             $cliente = !empty($payload['id_cliente']) ? Cliente::query()->findOrFail($payload['id_cliente']) : null;
             $destinatario = $cliente ? null : Destinatario::query()->findOrFail($payload['id_destinatario']);
             $payload = $this->applyCatalogRules($payload, $natureza, $cliente, $destinatario);
+            $this->validateFiscalDirection($payload, $natureza);
             $attributes = [
                 'numero' => $payload['numero'], 'serie' => $payload['serie'] ?? 1,
                 'status' => 'gerando', 'payload' => $payload, 'id_usuario' => $usuarioId,
@@ -518,6 +519,7 @@ final class NfeEmissionService
                 'erro',
             );
         }
+        $totalTributosAproximados = 0.0;
         $descontoDistribuido = 0.0;
         foreach ($p['produtos'] as $i => $item) {
             $n = $i + 1;
@@ -526,12 +528,17 @@ final class NfeEmissionService
                 ? round($desconto - $descontoDistribuido, 2)
                 : round($total > 0 ? $desconto * ($value / $total) : 0, 2);
             $descontoDistribuido = round($descontoDistribuido + $itemDesconto, 2);
+            
+            // Estimativa de tributos aproximados (Lei 12.741 / IBPT) ~ 31.45% base vestuário/manufatura
+            $vTotTribItem = round($value * 0.3145, 2);
+            $totalTributosAproximados += $vTotTribItem;
+
             $this->tag($make, 'tagprod', ['item' => $n, 'cProd' => $item['codigo'], 'cEAN' => 'SEM GTIN', 'cEANTrib' => 'SEM GTIN', 'xProd' => $item['descricao'], 'NCM' => $item['ncm'], 'CFOP' => $item['cfop'], 'uCom' => $item['unidade'], 'qCom' => $item['quantidade'], 'vUnCom' => $item['valor_unitario'], 'vProd' => $value, 'vDesc' => $itemDesconto > 0 ? $itemDesconto : null, 'uTrib' => $item['unidade'], 'qTrib' => $item['quantidade'], 'vUnTrib' => $item['valor_unitario'], 'indTot' => 1]);
-            $this->tag($make, 'tagimposto', ['item' => $n, 'vTotTrib' => 0]);
+            $this->tag($make, 'tagimposto', ['item' => $n, 'vTotTrib' => $vTotTribItem]);
             $this->appendTaxes($make, $item, $natureza, $n);
         }
         $valorNota = max(0, round($total - $desconto + $outrasDespesas, 2));
-        $this->tag($make, 'tagICMSTot', ['vBC'=>0,'vICMS'=>0,'vICMSDeson'=>0,'vBCST'=>0,'vST'=>0,'vProd'=>$total,'vFrete'=>0,'vSeg'=>0,'vDesc'=>$desconto,'vII'=>0,'vIPI'=>0,'vPIS'=>0,'vCOFINS'=>0,'vOutro'=>$outrasDespesas,'vNF'=>$valorNota,'vTotTrib'=>0]);
+        $this->tag($make, 'tagICMSTot', ['vBC'=>0,'vICMS'=>0,'vICMSDeson'=>0,'vBCST'=>0,'vST'=>0,'vProd'=>$total,'vFrete'=>0,'vSeg'=>0,'vDesc'=>$desconto,'vII'=>0,'vIPI'=>0,'vPIS'=>0,'vCOFINS'=>0,'vOutro'=>$outrasDespesas,'vNF'=>$valorNota,'vTotTrib'=>$totalTributosAproximados]);
         $this->appendTransport($make, $p['transportadora'] ?? [], $p['volumes'] ?? []);
         $tipoPagamento = (string) ($p['pagamento']['tpag'] ?? '90');
         // O schema NF-e 4.00 exige vPag no detPag. Para tPag=90
@@ -544,7 +551,20 @@ final class NfeEmissionService
         }
         $this->tag($make, 'tagpag', []);
         $this->tag($make, 'tagdetPag', $detalhePagamento);
+        
         $informacoesComplementares = trim((string) ($p['informacoes_complementares'] ?? $natureza->informacoes_complementares ?? ''));
+        
+        // Se ainda não contiver a mensagem do IBPT, inclui automaticamente o texto de transparência fiscal
+        if ($totalTributosAproximados > 0 && !str_contains($informacoesComplementares, 'IBPT')) {
+            $percentualIbpt = $total > 0 ? number_format(($totalTributosAproximados / $total) * 100, 2, ',', '.') : '31,45';
+            $valorFormatado = number_format($totalTributosAproximados, 2, ',', '.');
+            $textoIbpt = "Total aproximado de tributos: R$ {$valorFormatado} ({$percentualIbpt}%). Fonte IBPT.";
+            
+            $informacoesComplementares = $informacoesComplementares !== ''
+                ? $textoIbpt . "\n" . $informacoesComplementares
+                : $textoIbpt;
+        }
+
         if ($informacoesComplementares !== '') {
             $this->tag($make, 'taginfAdic', ['infCpl' => $informacoesComplementares]);
         }
@@ -630,6 +650,35 @@ final class NfeEmissionService
         return $payload;
     }
 
+    /** Impede o envio de CFOP de entrada em nota de saída (e vice-versa). */
+    private function validateFiscalDirection(array $payload, NaturezaOperacao $natureza): void
+    {
+        $isEntry = ($natureza->tipo_movimento ?? 'Saída') === 'Entrada';
+        $expected = $isEntry ? ['1', '2', '3'] : ['5', '6', '7'];
+
+        foreach ($payload['produtos'] as $index => $item) {
+            $cfop = preg_replace('/\D+/', '', (string) ($item['cfop'] ?? ''));
+            if ($cfop !== '' && !in_array($cfop[0], $expected, true)) {
+                $direction = $isEntry ? 'entrada' : 'saída';
+                $examples = $isEntry ? '1xxx, 2xxx ou 3xxx' : '5xxx, 6xxx ou 7xxx';
+                $itemLabel = trim((string) ($item['descricao'] ?? $item['codigo'] ?? ''));
+
+                throw new NfeEmissionException(
+                    sprintf(
+                        'Envio bloqueado antes da SEFAZ: o item %d%s usa o CFOP %s, que não é compatível com uma NF-e de %s. Informe um CFOP %s ou corrija o tipo da natureza de operação.',
+                        $index + 1,
+                        $itemLabel !== '' ? ' ('.$itemLabel.')' : '',
+                        $cfop,
+                        $direction,
+                        $examples,
+                    ),
+                    422,
+                    'rascunho',
+                );
+            }
+        }
+    }
+
     private function tag(Make $make, string $method, array $data): void
     {
         $data = array_filter($data, static fn ($value) => $value !== null && (!is_string($value) || trim($value) !== ''));
@@ -677,9 +726,29 @@ final class NfeEmissionService
     {
         $reason = trim((string) $reason);
 
-        return $reason !== ''
-            ? sprintf('Rejeição SEFAZ (%d): %s', $cstat, $reason)
-            : sprintf('A SEFAZ rejeitou a nota (cStat %d). Consulte os dados fiscais e tente novamente.', $cstat);
+        $normalizedReason = mb_strtolower($reason);
+        $guidance = match (true) {
+            $cstat === 302 => 'O destinatário está com situação fiscal irregular perante a SEFAZ. Confira o CNPJ e a Inscrição Estadual cadastrados e valide a situação no SINTEGRA/SEFAZ; a NF-e somente poderá ser autorizada após a regularização do destinatário.',
+            $cstat === 518 => 'A NF-e foi configurada como saída, mas contém CFOP de entrada. Use CFOP 5xxx, 6xxx ou 7xxx nos itens, ou corrija o tipo da natureza de operação para entrada.',
+            str_contains($normalizedReason, 'duplicidade') => 'A SEFAZ identificou que esta NF-e já foi enviada. Não tente emitir outra nota com a mesma numeração; consulte a chave e o protocolo da emissão anterior.',
+            str_contains($normalizedReason, 'cfop') => 'Existe um CFOP incompatível com a operação ou com os dados de algum item. Revise o CFOP indicado e a natureza de entrada/saída antes de tentar novamente.',
+            str_contains($normalizedReason, 'inscrição estadual') || str_contains($normalizedReason, 'inscricao estadual') => 'A Inscrição Estadual informada não foi aceita. Confira o número, a UF e a situação cadastral do emitente ou destinatário mencionado no retorno.',
+            str_contains($normalizedReason, 'cnpj') || str_contains($normalizedReason, 'cpf') => 'O documento informado não foi aceito pela SEFAZ. Confira o CNPJ/CPF, o cadastro selecionado e a situação fiscal da empresa ou pessoa indicada.',
+            str_contains($normalizedReason, 'ncm') => 'O NCM de um dos produtos é inválido ou não está vigente. Confira o código NCM indicado no cadastro do produto.',
+            str_contains($normalizedReason, 'csosn') || str_contains($normalizedReason, 'cst') => 'A tributação de um item não é compatível com o regime ou com a operação. Revise CSOSN/CST e a natureza de operação.',
+            str_contains($normalizedReason, 'total') || str_contains($normalizedReason, 'desconto') || str_contains($normalizedReason, 'base de cálculo') || str_contains($normalizedReason, 'base de calculo') => 'Os totais da NF-e não correspondem à soma dos itens, descontos ou impostos. Revise os valores indicados no retorno antes de reenviar.',
+            str_contains($normalizedReason, 'data de emissão') || str_contains($normalizedReason, 'data de emissao') => 'A data ou hora de emissão não foi aceita. Confira se ela está correta e dentro do período permitido pela SEFAZ.',
+            str_contains($normalizedReason, 'schema') || str_contains($normalizedReason, 'xml') => 'A SEFAZ encontrou um campo ausente ou em formato inválido no XML. Revise o detalhe técnico abaixo; se persistir, encaminhe o código à equipe de suporte.',
+            str_contains($normalizedReason, 'certificado') => 'O certificado digital não foi aceito. Confira validade, titularidade e configuração do certificado A1.',
+            default => 'A SEFAZ não autorizou a NF-e. Revise o detalhe técnico abaixo e corrija os dados indicados antes de tentar novamente.',
+        };
+
+        return sprintf(
+            'NF-e rejeitada pela SEFAZ (cStat %d). %s%s',
+            $cstat,
+            $guidance,
+            $reason !== '' ? ' Detalhe técnico: '.preg_replace('/^Rejeição:\s*/iu', '', $reason) : '',
+        );
     }
 
     private function friendlyIntegrationMessage(\Throwable $exception): string

@@ -13,10 +13,13 @@
                         <h2 class="mt-2 text-xl font-bold text-slate-950" x-text="activeTabLabel()"></h2>
                         <p class="mt-1 text-sm text-slate-500">Alterne entre as abas para ajustar dados fiscais, emissão e certificado digital.</p>
                     </div>
-                    <div class="border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Empresa atual</p>
-                        <p class="mt-1 max-w-[360px] truncate font-semibold text-slate-900" x-text="form.razao_social || 'Configure os dados da empresa'"></p>
-                        <p class="mt-1 text-xs text-slate-500" x-text="form.cnpj || 'CNPJ não informado'"></p>
+                    <div class="border border-slate-200 bg-slate-50 px-4 py-3 rounded-lg text-sm shadow-sm flex items-center gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 font-bold">🏢</div>
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Empresa atual</p>
+                            <p class="mt-0.5 max-w-[360px] truncate font-bold text-slate-800" x-text="form.razao_social || 'Configure os dados da empresa'"></p>
+                            <p class="mt-0.5 text-xs font-medium text-slate-500" x-text="form.cnpj ? form.cnpj.replace(/\D/g, '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : 'CNPJ não informado'"></p>
+                        </div>
                     </div>
                 </div>
 
@@ -164,8 +167,8 @@
                     <div class="border-t border-slate-200 pt-7">
                         <h3 class="text-base font-bold text-slate-950">Contato</h3>
                         <div class="mt-4 grid gap-x-6 gap-y-5 md:grid-cols-3">
-                            <label><span class="label">Telefone</span><input x-model="form.telefone" placeholder="(00) 0000-0000" :class="fieldClass('telefone')" inputmode="tel"></label>
-                            <label><span class="label">Celular</span><input x-model="form.celular" placeholder="(00) 00000-0000" :class="fieldClass('celular')" inputmode="tel"></label>
+                            <label><span class="label">Telefone</span><input x-model="form.telefone" x-mask="(99) 9999-9999" @input="formatarTelefoneInput($event)" placeholder="(00) 0000-0000" :class="fieldClass('telefone')" inputmode="tel"></label>
+                            <label><span class="label">Celular</span><input x-model="form.celular" x-mask="(99) 99999-9999" @input="formatarCelularInput($event)" placeholder="(00) 00000-0000" :class="fieldClass('celular')" inputmode="tel"></label>
                             <label><span class="label">E-mail</span><input x-model="form.email" type="email" placeholder="fiscal@empresa.com.br" :class="fieldClass('email')" autocomplete="email"></label>
                         </div>
                     </div>
@@ -634,6 +637,26 @@
                     }
 
                     return new Date(value).toLocaleDateString('pt-BR');
+                },
+                formatarTelefoneInput(event) {
+                    const digits = String(event.target.value || '').replace(/\D/g, '').slice(0, 10);
+                    if (digits.length <= 2) {
+                        this.form.telefone = digits.length ? '(' + digits : '';
+                    } else if (digits.length <= 6) {
+                        this.form.telefone = '(' + digits.slice(0, 2) + ') ' + digits.slice(2);
+                    } else {
+                        this.form.telefone = '(' + digits.slice(0, 2) + ') ' + digits.slice(2, 6) + '-' + digits.slice(6);
+                    }
+                },
+                formatarCelularInput(event) {
+                    const digits = String(event.target.value || '').replace(/\D/g, '').slice(0, 11);
+                    if (digits.length <= 2) {
+                        this.form.celular = digits.length ? '(' + digits : '';
+                    } else if (digits.length <= 7) {
+                        this.form.celular = '(' + digits.slice(0, 2) + ') ' + digits.slice(2);
+                    } else {
+                        this.form.celular = '(' + digits.slice(0, 2) + ') ' + digits.slice(2, 7) + '-' + digits.slice(7);
+                    }
                 },
             };
         }

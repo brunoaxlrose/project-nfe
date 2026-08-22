@@ -1,4 +1,6 @@
 /vendor/
+/node_modules/
+/public/build/
 /storage/*.key
 /storage/app/certificados/*
 /storage/app/nfe/*

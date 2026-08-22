@@ -69,7 +69,7 @@
                 activeTab: null,
                 permissions: [],
                 permissionsReady: false,
-                frontendVersion: '2026-08-16-fornecedores-v3',
+                frontendVersion: '2026-08-22-naturezas-v5',
                 routes: {
                     '/dashboard': { id: 'dashboard', titulo: 'Início', permission: 'menu.dashboard' },
                     '/dashboard/nfe/nova': { id: 'nfe-create', titulo: 'Nova NF-e', permission: 'nfe.criar' },
@@ -77,6 +77,9 @@
                     '/dashboard/configuracoes': { id: 'configuracoes', titulo: 'Configurações', permission: 'menu.configuracoes' },
                     '/dashboard/usuarios': { id: 'usuarios', titulo: 'Usuários e permissões', permission: 'menu.usuarios' },
                     '/dashboard/fornecedores': { id: 'fornecedores', titulo: 'Fornecedores', permission: 'fornecedores.visualizar' },
+                    '/dashboard/clientes': { id: 'clientes', titulo: 'Clientes e Fornecedores', permission: 'clientes.visualizar' },
+                    '/dashboard/naturezas': { id: 'naturezas', titulo: 'Naturezas de Operação', permission: 'naturezas.visualizar' },
+                    '/dashboard/produtos': { id: 'produtos', titulo: 'Produtos', permission: 'produtos.visualizar' },
                 },
                 init() {
                     if (this.initialized) {
@@ -420,8 +423,13 @@
 
                     if (tab.error) {
                         const errorBox = document.createElement('div');
-                        errorBox.className = 'border border-red-200 bg-red-50 p-5 text-sm text-red-700';
-                        errorBox.textContent = tab.error;
+                        errorBox.className = 'mx-auto max-w-lg my-12 border border-slate-200 bg-white p-8 shadow-md text-center rounded-xl';
+                        errorBox.innerHTML = `
+                            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600 mx-auto text-xl font-bold">!</div>
+                            <h3 class="mt-4 text-base font-bold text-slate-900">Falha ao carregar a tela</h3>
+                            <p class="mt-2 text-sm text-slate-500">${tab.error}</p>
+                            <button type="button" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2.5 rounded shadow-sm transition" onclick="document.querySelector('[x-data]').__x.$data.loadTab(document.querySelector('[x-data]').__x.$data.tabs.find(t => t.id === '${tab.id}'))">Tentar novamente</button>
+                        `;
                         pane.appendChild(errorBox);
                     } else {
                         pane.innerHTML = tab.conteudoHtml;
@@ -554,6 +562,7 @@
                                         <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Cadastros</p>
                                         <a x-show="can('produtos.visualizar')" x-cloak href="#" @click.prevent="openTab({id: 'produtos', titulo: 'Produtos', permission: 'produtos.visualizar', url: '/dashboard/produtos'}); activeDropdown = null" class="block py-1 hover:text-white transition">Produtos</a>
                                         <a x-show="can('clientes.visualizar')" x-cloak href="#" @click.prevent="openTab({id: 'clientes', titulo: 'Clientes e Fornecedores', permission: 'clientes.visualizar', url: '/dashboard/clientes'}); activeDropdown = null" class="block py-1 hover:text-white transition">Clientes e Fornecedores</a>
+                                        <a x-show="can('naturezas.visualizar')" x-cloak href="#" @click.prevent="openTab({id: 'naturezas', titulo: 'Naturezas de Operação', permission: 'naturezas.visualizar', url: '/dashboard/naturezas'}); activeDropdown = null" class="block py-1 hover:text-white transition">Naturezas de Operação</a>
                                     </div>
                                 </div>
                             </div>
@@ -620,8 +629,8 @@
                     <span>/</span>
                     <span x-show="activeTabData?.id === 'nfe-index' || activeTabData?.id === 'nfe-create'" x-cloak>Vendas</span>
                     <span x-show="activeTabData?.id === 'nfe-index' || activeTabData?.id === 'nfe-create'" x-cloak>/</span>
-                    <span x-show="activeTabData?.id === 'fornecedores' || activeTabData?.id === 'produtos' || activeTabData?.id === 'clientes'" x-cloak>Cadastros</span>
-                    <span x-show="activeTabData?.id === 'fornecedores' || activeTabData?.id === 'produtos' || activeTabData?.id === 'clientes'" x-cloak>/</span>
+                    <span x-show="activeTabData?.id === 'fornecedores' || activeTabData?.id === 'produtos' || activeTabData?.id === 'clientes' || activeTabData?.id === 'naturezas'" x-cloak>Cadastros</span>
+                    <span x-show="activeTabData?.id === 'fornecedores' || activeTabData?.id === 'produtos' || activeTabData?.id === 'clientes' || activeTabData?.id === 'naturezas'" x-cloak>/</span>
                     <span x-show="activeTabData?.id === 'usuarios' || activeTabData?.id === 'configuracoes'" x-cloak>Meu Negócio</span>
                     <span x-show="activeTabData?.id === 'usuarios' || activeTabData?.id === 'configuracoes'" x-cloak>/</span>
                     <span class="text-blue-600 font-semibold" x-text="activeTabData?.id === 'nfe-index' ? 'Notas Fiscais (NF-e)' : (activeTabData?.titulo || 'Início')"></span>

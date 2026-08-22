@@ -131,7 +131,7 @@ class FaturamentoController extends Controller
         });
 
         return response()->json([
-            'message' => 'Rascunho criado a partir da nota selecionada.',
+            'message' => 'Nota pendente criada a partir da nota selecionada.',
             'id' => $draft->id,
             'numero' => $draft->numero,
             'payload' => $draft->payload,
@@ -163,14 +163,14 @@ class FaturamentoController extends Controller
     {
         if ($nfe->status !== 'rascunho') {
             return response()->json([
-                'message' => 'Apenas notas em estado de Rascunho podem ser excluídas.',
+                'message' => 'Apenas notas pendentes podem ser excluídas.',
             ], 422);
         }
 
         $nfe->delete();
 
         return response()->json([
-            'message' => 'Rascunho excluído com sucesso.',
+            'message' => 'Nota pendente excluída com sucesso.',
         ]);
     }
 

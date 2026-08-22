@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Empresa extends Model
 {
+    // O model permanece ativo porque usuários, permissões, configurações e o
+    // isolamento por empresa dependem dele. Apenas o cadastro público foi
+    // desativado nas rotas e no RegisterController.
     use UsesCorporateNaming;
 
     protected $table = 'empresa';

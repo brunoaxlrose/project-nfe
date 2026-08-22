@@ -126,21 +126,100 @@ class CatalogController extends Controller
     public function naturezas(Request $request): JsonResponse
     {
         $empresaId = (int) $request->user()->id_empresa;
-        $naturezas = NaturezaOperacao::query()
-            ->where('ativa', true)
-            ->orderBy('nome')
-            ->get();
+        $incluirInativas = $request->boolean('all', false);
+
+        $query = NaturezaOperacao::query()
+            ->when(!$incluirInativas, fn ($q) => $q->where('ativa', true))
+            ->orderBy('nome');
+
+        $naturezas = $query->get();
 
         if ($naturezas->isEmpty()) {
             app(NaturezaOperacaoSeeder::class)->seedEmpresa($empresaId);
 
             $naturezas = NaturezaOperacao::query()
-                ->where('ativa', true)
+                ->when(!$incluirInativas, fn ($q) => $q->where('ativa', true))
                 ->orderBy('nome')
                 ->get();
         }
 
         return response()->json($naturezas);
+    }
+
+    public function naturezasSalvar(Request $request): JsonResponse
+    {
+        $request->merge([
+            'cfop_padrao' => preg_replace('/\D+/', '', (string) $request->input('cfop_padrao', '')),
+            'csosn_padrao' => preg_replace('/\D+/', '', (string) $request->input('csosn_padrao', '')),
+            'cst_padrao' => preg_replace('/\D+/', '', (string) $request->input('cst_padrao', '')),
+        ]);
+
+        $data = $request->validate([
+            'nome' => ['required', 'string', 'max:120'],
+            'tipo_movimento' => ['required', 'in:Entrada,Saída,Saida'],
+            'cfop_padrao' => ['required', 'digits:4'],
+            'csosn_padrao' => ['nullable', 'string', 'max:4'],
+            'cst_padrao' => ['nullable', 'string', 'max:3'],
+            'calcula_impostos' => ['sometimes', 'boolean'],
+            'calcula_icms' => ['sometimes', 'boolean'],
+            'calcula_ipi' => ['sometimes', 'boolean'],
+            'calcula_pis' => ['sometimes', 'boolean'],
+            'calcula_cofins' => ['sometimes', 'boolean'],
+            'informacoes_complementares' => ['nullable', 'string', 'max:1000'],
+            'ativa' => ['sometimes', 'boolean'],
+        ]);
+
+        $data['tipo_movimento'] = $data['tipo_movimento'] === 'Saida' ? 'Saída' : $data['tipo_movimento'];
+        $data['ativa'] = $data['ativa'] ?? true;
+        $data['id_empresa'] = $request->user()->id_empresa;
+
+        $natureza = NaturezaOperacao::create($data);
+
+        return response()->json([
+            'message' => 'Natureza de operação cadastrada com sucesso.',
+            'natureza' => $natureza,
+        ], 201);
+    }
+
+    public function naturezasEditar(Request $request, NaturezaOperacao $natureza): JsonResponse
+    {
+        $request->merge([
+            'cfop_padrao' => preg_replace('/\D+/', '', (string) $request->input('cfop_padrao', '')),
+            'csosn_padrao' => preg_replace('/\D+/', '', (string) $request->input('csosn_padrao', '')),
+            'cst_padrao' => preg_replace('/\D+/', '', (string) $request->input('cst_padrao', '')),
+        ]);
+
+        $data = $request->validate([
+            'nome' => ['required', 'string', 'max:120'],
+            'tipo_movimento' => ['required', 'in:Entrada,Saída,Saida'],
+            'cfop_padrao' => ['required', 'digits:4'],
+            'csosn_padrao' => ['nullable', 'string', 'max:4'],
+            'cst_padrao' => ['nullable', 'string', 'max:3'],
+            'calcula_impostos' => ['sometimes', 'boolean'],
+            'calcula_icms' => ['sometimes', 'boolean'],
+            'calcula_ipi' => ['sometimes', 'boolean'],
+            'calcula_pis' => ['sometimes', 'boolean'],
+            'calcula_cofins' => ['sometimes', 'boolean'],
+            'informacoes_complementares' => ['nullable', 'string', 'max:1000'],
+            'ativa' => ['sometimes', 'boolean'],
+        ]);
+
+        $data['tipo_movimento'] = $data['tipo_movimento'] === 'Saida' ? 'Saída' : $data['tipo_movimento'];
+        $natureza->update($data);
+
+        return response()->json([
+            'message' => 'Natureza de operação atualizada com sucesso.',
+            'natureza' => $natureza,
+        ]);
+    }
+
+    public function naturezasExcluir(NaturezaOperacao $natureza): JsonResponse
+    {
+        $natureza->delete();
+
+        return response()->json([
+            'message' => 'Natureza de operação excluída com sucesso.',
+        ]);
     }
 
     public function clientesBuscar(Request $request): JsonResponse

@@ -1,3 +1,12 @@
+FROM node:22-bookworm-slim AS frontend
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY vite.config.ts tsconfig.json ./
+COPY resources/spa ./resources/spa
+RUN npm run build
+
 FROM php:8.3-cli-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -13,6 +22,7 @@ COPY composer.json ./
 RUN mkdir -p database/seeders
 RUN composer install --no-interaction --prefer-dist --no-progress --no-scripts
 COPY . .
+COPY --from=frontend /app/public/build ./public/build
 RUN mkdir -p storage/app/nfe storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache
 RUN composer dump-autoload --optimize --no-interaction

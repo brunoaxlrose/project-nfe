@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\LoginRequest;
 use App\Models\User;
 use App\Services\JwtService;
 use Illuminate\Http\JsonResponse;
@@ -14,12 +15,9 @@ class AuthController extends Controller
     {
     }
 
-    public function login(Request $request): JsonResponse
+    public function login(LoginRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string', 'max:200'],
-        ]);
+        $data = $request->validated();
         $user = User::query()
             ->with(['perfilAcesso.permissoes', 'permissoesDiretas'])
             ->where('email', $data['email'])

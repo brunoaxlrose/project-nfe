@@ -13,6 +13,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
+/*
+ * Cadastro público de empresas desativado.
+ * Mantido comentado para permitir uma futura reativação controlada.
+ *
 class RegisterController extends Controller
 {
     public function __construct(
@@ -69,3 +73,4 @@ class RegisterController extends Controller
         ], 201);
     }
 }
+*/

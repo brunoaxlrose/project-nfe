@@ -56,6 +56,25 @@ Antes do primeiro uso:
 
 O `docker-compose.yml` local, o `.env`, os certificados e os documentos fiscais permanecem fora do histórico do Git.
 
+## Arquitetura headless
+
+O Laravel 13 concentra regras de negócio, RBAC multiempresa, validação e endpoints JSON em `routes/api.php`. A interface é uma SPA em Vue 3, Vite, Pinia, Vue Router e Tailwind CSS, servida pelo Laravel apenas como shell estático.
+
+- `resources/spa/services/api.ts`: cliente HTTP central com Bearer token e tratamento de sessão expirada.
+- `resources/spa/stores`: sessão autenticada e notificações globais.
+- `resources/spa/views`: autenticação, dashboard, cadastros, usuários, configurações, NF-e e histórico.
+- `app/Http/Requests`: normalização e validação dos payloads.
+- `app/Http/Resources`: contratos públicos e sanitizados da API.
+- `app/Http/Controllers/Api`: controllers REST dos cadastros centrais.
+
+Para desenvolvimento do frontend:
+
+1. Execute `npm install`.
+2. Execute `npm run dev` em paralelo ao Laravel.
+3. Use `npm run build` para validar tipos e gerar os assets de produção.
+
+O Dockerfile usa build multi-stage: o Node compila a SPA e não permanece na imagem PHP final.
+
 ## Público do sistema
 
 O FiscalFlow foi pensado para empresas, escritórios e equipes que precisam centralizar a operação fiscal, reduzir tarefas repetitivas e acompanhar as emissões em uma única tela.

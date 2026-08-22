@@ -45,7 +45,9 @@
                                     <td class="px-5 py-3.5 border border-slate-200 text-slate-600 text-center" x-text="produto.unidade"></td>
                                     <td class="px-5 py-3.5 border border-slate-200 font-semibold text-slate-800 text-center" x-text="money(produto.valor_unitario)"></td>
                                     <td class="px-5 py-3.5 border border-slate-200 text-center">
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold" :class="produto.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'" x-text="produto.ativo ? 'Ativo' : 'Inativo'"></span>
+                                        <button type="button" @click="toggleAtivo(produto)" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none" :class="produto.ativo ? 'bg-emerald-500' : 'bg-slate-200'">
+                                            <span aria-hidden="true" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out" :class="produto.ativo ? 'translate-x-5' : 'translate-x-0'"></span>
+                                        </button>
                                     </td>
                                     <td class="px-5 py-3.5 border border-slate-200 text-center space-x-2">
                                         <button x-show="can('produtos.editar')" type="button" @click="editarProduto(produto)" class="text-blue-600 hover:text-blue-800 transition" title="Editar Produto">
@@ -122,7 +124,7 @@
                                 <input x-model="form.valor_unitario" 
                                        type="text" 
                                        @input="formatMoneyInput"
-                                       class="field" required placeholder="Ex: 15,5000">
+                                       class="field" required placeholder="0,0000">
                             </label>
                         </div>
                         <div class="grid gap-4 md:grid-cols-3">
@@ -230,7 +232,7 @@
                             descricao: '',
                             ncm: '',
                             unidade: 'UN',
-                            valor_unitario: 0.00,
+                            valor_unitario: '0,0000',
                             cfop: '5901',
                             csosn: '0400',
                             cst: '',
@@ -249,7 +251,6 @@
                             }
                         }
                         if (this.form.valor_unitario !== undefined && this.form.valor_unitario !== null) {
-                            // format float to string 15.5000 -> 15,5000 (allowing easy edit with money mask)
                             this.form.valor_unitario = Number(this.form.valor_unitario)
                                 .toFixed(4)
                                 .replace('.', ',');
@@ -270,12 +271,10 @@
                         if (payload.ncm) {
                             payload.ncm = payload.ncm.replace(/\D/g, '');
                         }
-                        if (payload.valor_unitario && typeof payload.valor_unitario === 'string') {
-                            payload.valor_unitario = parseFloat(
-                                payload.valor_unitario
-                                    .replace(/\./g, '')
-                                    .replace(',', '.')
-                            ) || 0;
+                        if (payload.valor_unitario !== undefined && payload.valor_unitario !== null) {
+                            payload.valor_unitario = typeof payload.valor_unitario === 'string'
+                                ? parseFloat(payload.valor_unitario.replace(/\./g, '').replace(',', '.')) || 0
+                                : parseFloat(payload.valor_unitario) || 0;
                         }
 
                         try {
@@ -304,23 +303,52 @@
                     formatMoneyInput(e) {
                         let value = e.target.value.replace(/\D/g, '');
                         if (!value) {
-                            this.form.valor_unitario = '';
+                            this.form.valor_unitario = '0,0000';
                             return;
                         }
-                        // Fill zeros to have at least 4 digits
-                        while (value.length < 5) {
-                            value = '0' + value;
-                        }
+                        // Ensure at least 5 digits so we have 4 decimals
+                        value = value.padStart(5, '0');
                         const integerPart = value.slice(0, -4);
                         const decimalPart = value.slice(-4);
                         
-                        // format integer part with dot separators
                         const formattedInteger = Number(integerPart).toLocaleString('pt-BR');
                         this.form.valor_unitario = formattedInteger + ',' + decimalPart;
                     },
 
+                     async toggleAtivo(produto) {
+                        const originalValue = produto.ativo;
+                        produto.ativo = !produto.ativo;
+                        try {
+                            const response = await fiscalFetch('/api/produtos/' + produto.id, {
+                                method: 'PUT',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': 'Bearer ' + localStorage.getItem('nfe_token')
+                                },
+                                body: JSON.stringify({
+                                    ...produto,
+                                    ncm: produto.ncm ? produto.ncm.replace(/\D/g, '') : '',
+                                    valor_unitario: produto.valor_unitario ? parseFloat(produto.valor_unitario) : 0
+                                })
+                            });
+                            if (!response.ok) {
+                                throw new Error();
+                            }
+                            window.fiscalToast?.('success', `Produto ${produto.ativo ? 'ativado' : 'inativado'} com sucesso.`, 'Status');
+                        } catch (err) {
+                            produto.ativo = originalValue;
+                            window.fiscalToast?.('error', 'Falha ao alterar status do produto.', 'Erro');
+                        }
+                    },
+
                     async excluirProduto(produto) {
-                        if (!confirm('Deseja realmente excluir o produto ' + produto.descricao + '?')) {
+                        const confirmado = await window.fiscalConfirm?.({
+                            title: 'Excluir Produto',
+                            message: 'Deseja realmente excluir o produto ' + produto.descricao + '?',
+                            confirmText: 'Excluir',
+                            cancelText: 'Cancelar'
+                        });
+                        if (!confirmado) {
                             return;
                         }
                         try {
@@ -339,7 +367,8 @@
                     },
 
                     money(value) {
-                        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
+                        const num = Number(value) || 0;
+                        return 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
                     }
                 }));
             });

@@ -27,7 +27,7 @@
                         <button type="submit" :disabled="loading" class="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"><svg x-show="loading" class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg><span x-text="loading ? 'Autenticando...' : 'Entrar no sistema'"></span></button>
                     </form>
                 </div>
-                <p class="mt-6 text-center text-sm text-slate-500">Ainda não possui uma conta? <a href="{{ route('register') }}" class="font-semibold text-blue-600 hover:text-blue-700">Criar empresa</a></p>
+                {{-- Cadastro público de empresas desativado. --}}
             </div>
         </section>
     </main>

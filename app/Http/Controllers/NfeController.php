@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Exceptions\NfeEmissionException;
 use App\Models\Nfe;
 use App\Models\ConfiguracaoEmissor;
+use App\Models\Cliente;
+use App\Models\Destinatario;
 use App\Services\NfeEmissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +18,63 @@ class NfeController extends Controller
 {
     public function __construct(private readonly NfeEmissionService $emitter) {}
 
+    public function recipients(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('search', $request->query('q', '')));
+        $documento = preg_replace('/\D+/', '', $search);
+        $limit = min(max($request->integer('per_page', 12), 1), 25);
+        $applySearch = static function ($query, string $nameColumn) use ($search, $documento): void {
+            $query->when($search !== '', function ($builder) use ($nameColumn, $search, $documento): void {
+                $builder->where(function ($where) use ($nameColumn, $search, $documento): void {
+                    $where->where($nameColumn, 'ilike', '%'.$search.'%');
+                    if ($documento !== '') {
+                        $where->orWhere('documento', 'like', '%'.$documento.'%');
+                    }
+                });
+            });
+        };
+
+        $clientesQuery = Cliente::query()->where('ativo', true);
+        $applySearch($clientesQuery, 'razao_social');
+        $clientes = $clientesQuery->orderBy('razao_social')->limit($limit)->get()->map(fn (Cliente $cliente): array => [
+            'id' => 'cliente-'.$cliente->getKey(),
+            'entity_id' => $cliente->getKey(),
+            'type' => 'cliente',
+            'name' => $cliente->razao_social,
+            'documento' => $cliente->documento,
+            'inscricao_estadual' => $cliente->inscricao_estadual,
+            'cep' => $cliente->cep,
+            'logradouro' => $cliente->logradouro,
+            'numero' => $cliente->numero,
+            'bairro' => $cliente->bairro,
+            'cidade' => $cliente->cidade,
+            'codigo_ibge' => $cliente->codigo_ibge,
+            'uf' => $cliente->uf,
+        ]);
+
+        $fornecedoresQuery = Destinatario::query()->where('tipo', 'fornecedor')->where('ativo', true);
+        $applySearch($fornecedoresQuery, 'nome_razao_social');
+        $fornecedores = $fornecedoresQuery->orderBy('nome_razao_social')->limit($limit)->get()->map(fn (Destinatario $fornecedor): array => [
+            'id' => 'fornecedor-'.$fornecedor->getKey(),
+            'entity_id' => $fornecedor->getKey(),
+            'type' => 'fornecedor',
+            'name' => $fornecedor->nome_razao_social,
+            'documento' => $fornecedor->documento,
+            'inscricao_estadual' => $fornecedor->inscricao_estadual,
+            'cep' => $fornecedor->cep,
+            'logradouro' => $fornecedor->logradouro,
+            'numero' => $fornecedor->numero,
+            'bairro' => $fornecedor->bairro,
+            'cidade' => $fornecedor->municipio,
+            'codigo_ibge' => $fornecedor->codigo_municipio_ibge,
+            'uf' => $fornecedor->uf,
+        ]);
+
+        return response()->json([
+            'data' => $clientes->concat($fornecedores)->sortBy('name')->take($limit)->values(),
+        ]);
+    }
+
     public function nextNumber(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -23,9 +82,16 @@ class NfeController extends Controller
         ]);
         $serie = (int) ($data['serie'] ?? 1);
         $config = ConfiguracaoEmissor::current();
-        $numero = ((int) Nfe::query()->where('serie', $serie)->max('numero')) + 1;
+
+        $maxNumeroBanco = (int) Nfe::query()->where('serie', $serie)->max('numero');
+        $numeroCalculado = $maxNumeroBanco + 1;
+
         if ((int) $config->serie_padrao === $serie && $config->proximo_numero) {
-            $numero = (int) $config->proximo_numero;
+            $numeroConfig = (int) $config->proximo_numero;
+            // Se a configuração for maior que as notas emitidas, usa ela; senão usa a próxima do banco
+            $numero = max($numeroConfig, $numeroCalculado);
+        } else {
+            $numero = $numeroCalculado;
         }
 
         return response()->json(['serie' => $serie, 'numero' => $numero]);
@@ -150,13 +216,19 @@ class NfeController extends Controller
                     'id_cliente' => $cliente?->id,
                     'id_destinatario' => $destinatario?->id,
                     'id_natureza_operacao' => $payload['id_natureza_operacao'],
-                    'destinatario_documento' => preg_replace('/\D+/', '', (string) ($payload['destinatario']['cnpj'] ?? $payload['destinatario']['cpf'] ?? '')),
+                    'destinatario_documento' => preg_replace('/\D+/', '', (string) ($cliente?->documento ?: $destinatario?->documento ?: '')),
                 ]);
 
                 return response()->json([...$nfe->fresh()->toArray(), 'message' => 'NF-e salva como pendente.'], 201);
             }
 
             $nfe = $this->emitter->emit($payload, $request->user()->id);
+            if (in_array($nfe->status, ['rejeitada', 'erro'], true)) {
+                return response()->json([
+                    ...$nfe->toArray(),
+                    'message' => $nfe->xmotivo ?: 'A SEFAZ rejeitou a NF-e. Revise os dados fiscais informados.',
+                ], 422);
+            }
             if ($nfe->status === 'autorizada') {
                 $config = ConfiguracaoEmissor::current();
                 if ((int) $config->serie_padrao === (int) $nfe->serie && (int) $config->proximo_numero === (int) $nfe->numero) {
@@ -192,6 +264,12 @@ class NfeController extends Controller
 
         try {
             $emitida = $this->emitter->emit($nfe->payload ?? [], $request->user()->id, $nfe);
+            if (in_array($emitida->status, ['rejeitada', 'erro'], true)) {
+                return response()->json([
+                    ...$emitida->toArray(),
+                    'message' => $emitida->xmotivo ?: 'A SEFAZ rejeitou a NF-e. Revise os dados fiscais informados.',
+                ], 422);
+            }
             return response()->json($emitida);
         } catch (NfeEmissionException $exception) {
             return response()->json([

@@ -5,42 +5,53 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FaturamentoController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\EmpresaConfiguracaoController;
-use App\Http\Controllers\RegisterController;
+// use App\Http\Controllers\RegisterController; // Cadastro público desativado.
 use App\Http\Controllers\UsuarioController;
+use App\Http\Controllers\Api\ClienteController;
+use App\Http\Controllers\Api\FornecedorController;
+use App\Http\Controllers\Api\NaturezaOperacaoController;
+use App\Http\Controllers\Api\ProdutoController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/login', [AuthController::class, 'login'])
     ->middleware(['json.payload', 'throttle:10,1']);
-Route::post('/auth/register', [RegisterController::class, 'store'])
-    ->middleware(['json.payload', 'throttle:5,1']);
+// Cadastro público de empresas desativado.
+// Route::post('/auth/register', [RegisterController::class, 'store'])
+//     ->middleware(['json.payload', 'throttle:5,1']);
 
 Route::middleware(['jwt', 'json.payload'])->group(function (): void {
     Route::get('/destinatarios', [CatalogController::class, 'destinatarios'])->middleware('permission:clientes.visualizar');
     Route::get('/destinatarios/buscar', [CatalogController::class, 'destinatariosBuscar'])->middleware('permission:clientes.visualizar');
     
-    // Fornecedores Management API
-    Route::get('/fornecedores', [CatalogController::class, 'index'])->middleware('permission:fornecedores.visualizar');
-    Route::post('/fornecedores', [CatalogController::class, 'store'])->middleware('permission:fornecedores.criar');
-    Route::put('/fornecedores/{fornecedor}', [CatalogController::class, 'update'])->middleware('permission:fornecedores.editar');
-    Route::delete('/fornecedores/{fornecedor}', [CatalogController::class, 'destroy'])->middleware('permission:fornecedores.excluir');
+    Route::apiResource('fornecedores', FornecedorController::class)
+        ->parameters(['fornecedores' => 'fornecedor'])
+        ->middlewareFor(['index', 'show'], 'permission:fornecedores.visualizar')
+        ->middlewareFor('store', 'permission:fornecedores.criar')
+        ->middlewareFor('update', 'permission:fornecedores.editar')
+        ->middlewareFor('destroy', 'permission:fornecedores.excluir');
+    Route::apiResource('naturezas-operacao', NaturezaOperacaoController::class)
+        ->parameters(['naturezas-operacao' => 'natureza'])
+        ->middlewareFor(['index', 'show'], 'permission:naturezas.visualizar')
+        ->middlewareFor('store', 'permission:naturezas.criar')
+        ->middlewareFor('update', 'permission:naturezas.editar')
+        ->middlewareFor('destroy', 'permission:naturezas.excluir');
 
-    Route::get('/naturezas-operacao', [CatalogController::class, 'naturezas'])->middleware('permission:naturezas.visualizar');
-    
-    // Clientes Management API
-    Route::get('/clientes', [CatalogController::class, 'clientesListar'])->middleware('permission:clientes.visualizar');
-    Route::post('/clientes', [CatalogController::class, 'clientesSalvar'])->middleware('permission:clientes.criar');
-    Route::put('/clientes/{cliente}', [CatalogController::class, 'clientesEditar'])->middleware('permission:clientes.editar');
-    Route::delete('/clientes/{cliente}', [CatalogController::class, 'clientesExcluir'])->middleware('permission:clientes.excluir');
     Route::get('/clientes/buscar', [CatalogController::class, 'clientesBuscar'])->middleware('permission:clientes.visualizar');
     Route::post('/clientes/importar', [CatalogController::class, 'importarCliente'])->middleware('permission:clientes.criar');
-    
-    // Produtos Management API
-    Route::get('/produtos', [CatalogController::class, 'produtosListar'])->middleware('permission:produtos.visualizar');
-    Route::post('/produtos', [CatalogController::class, 'produtosSalvar'])->middleware('permission:produtos.criar');
-    Route::put('/produtos/{produto}', [CatalogController::class, 'produtosEditar'])->middleware('permission:produtos.editar');
-    Route::delete('/produtos/{produto}', [CatalogController::class, 'produtosExcluir'])->middleware('permission:produtos.excluir');
     Route::get('/produtos/buscar', [CatalogController::class, 'produtosBuscar'])->middleware('permission:produtos.visualizar');
+    Route::apiResource('clientes', ClienteController::class)
+        ->middlewareFor(['index', 'show'], 'permission:clientes.visualizar')
+        ->middlewareFor('store', 'permission:clientes.criar')
+        ->middlewareFor('update', 'permission:clientes.editar')
+        ->middlewareFor('destroy', 'permission:clientes.excluir');
+    Route::apiResource('produtos', ProdutoController::class)
+        ->middlewareFor(['index', 'show'], 'permission:produtos.visualizar')
+        ->middlewareFor('store', 'permission:produtos.criar')
+        ->middlewareFor('update', 'permission:produtos.editar')
+        ->middlewareFor('destroy', 'permission:produtos.excluir');
     Route::post('/nfe', [NfeController::class, 'store'])
+        ->middleware('permission:nfe.criar');
+    Route::get('/nfe/destinatarios', [NfeController::class, 'recipients'])
         ->middleware('permission:nfe.criar');
     Route::get('/nfe/proximo-numero', [NfeController::class, 'nextNumber'])
         ->middleware('permission:nfe.criar');

@@ -36,6 +36,9 @@ final class RbacService
         ['nome' => 'Editar produtos', 'slug' => 'produtos.editar', 'categoria' => 'Cadastros'],
         ['nome' => 'Excluir produtos', 'slug' => 'produtos.excluir', 'categoria' => 'Cadastros'],
         ['nome' => 'Consultar naturezas de operação', 'slug' => 'naturezas.visualizar', 'categoria' => 'Cadastros'],
+        ['nome' => 'Cadastrar naturezas de operação', 'slug' => 'naturezas.criar', 'categoria' => 'Cadastros'],
+        ['nome' => 'Editar naturezas de operação', 'slug' => 'naturezas.editar', 'categoria' => 'Cadastros'],
+        ['nome' => 'Excluir naturezas de operação', 'slug' => 'naturezas.excluir', 'categoria' => 'Cadastros'],
         ['nome' => 'Consultar configurações da empresa', 'slug' => 'configuracoes.visualizar', 'categoria' => 'Configurações'],
         ['nome' => 'Alterar configurações da empresa', 'slug' => 'configuracoes.editar', 'categoria' => 'Configurações'],
         ['nome' => 'Gerenciar certificado digital', 'slug' => 'certificado.gerenciar', 'categoria' => 'Configurações'],
@@ -68,6 +71,9 @@ final class RbacService
             'produtos.editar',
             'produtos.excluir',
             'naturezas.visualizar',
+            'naturezas.criar',
+            'naturezas.editar',
+            'naturezas.excluir',
         ],
         'faturamento' => [
             'menu.dashboard',
@@ -85,6 +91,8 @@ final class RbacService
             'produtos.visualizar',
             'produtos.criar',
             'naturezas.visualizar',
+            'naturezas.criar',
+            'naturezas.editar',
         ],
     ];
 

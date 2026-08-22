@@ -43,6 +43,11 @@ class WorkspaceController extends Controller
         return $this->renderPage($request, 'clientes.index');
     }
 
+    public function naturezas(Request $request): View|string
+    {
+        return $this->renderPage($request, 'naturezas.index');
+    }
+
     public function produtos(Request $request): View|string
     {
         return $this->renderPage($request, 'produtos.index');

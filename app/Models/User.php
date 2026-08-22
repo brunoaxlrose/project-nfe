@@ -102,6 +102,10 @@ class User extends Authenticatable
             return false;
         }
 
+        if ($profile->slug === 'administrador' || $this->perfil === 'Administrador') {
+            return true;
+        }
+
         $this->loadMissing('permissoesDiretas');
         $profile->loadMissing('permissoes');
 
@@ -122,6 +126,10 @@ class User extends Authenticatable
             return [];
         }
 
+        if ($profile->slug === 'administrador' || $this->perfil === 'Administrador') {
+            return collect(\App\Services\RbacService::PERMISSIONS)->pluck('slug')->all();
+        }
+
         $this->loadMissing('permissoesDiretas');
         $profile->loadMissing('permissoes');
 
@@ -137,6 +145,10 @@ class User extends Authenticatable
     public function authPayload(): array
     {
         $profile = $this->perfilAcesso;
+        $ambienteSefaz = (int) (ConfiguracaoEmissor::query()
+            ->withoutGlobalScopes()
+            ->where('id_empresa', $this->id_empresa)
+            ->value('ambiente') ?: 2);
 
         return [
             'id' => $this->id_usuario,
@@ -149,6 +161,7 @@ class User extends Authenticatable
             'perfil' => $profile?->nome ?: $this->perfil,
             'perfil_slug' => $profile?->slug,
             'permissions' => $this->permissoesSlugs(),
+            'ambiente_sefaz' => $ambienteSefaz,
         ];
     }
 }

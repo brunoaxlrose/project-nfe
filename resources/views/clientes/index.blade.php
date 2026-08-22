@@ -43,7 +43,9 @@
                                     <td class="px-5 py-3.5 border border-slate-200 text-slate-600 text-center" x-text="cliente.inscricao_estadual || 'Isento/Não informado'"></td>
                                     <td class="px-5 py-3.5 border border-slate-200 text-slate-600 text-center" x-text="cliente.cidade ? cliente.cidade + ' / ' + cliente.uf : 'Não informado'"></td>
                                     <td class="px-5 py-3.5 border border-slate-200 text-center">
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold" :class="cliente.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'" x-text="cliente.ativo ? 'Ativo' : 'Inativo'"></span>
+                                        <button type="button" @click="toggleAtivo(cliente)" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none" :class="cliente.ativo ? 'bg-emerald-500' : 'bg-slate-200'">
+                                            <span aria-hidden="true" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out" :class="cliente.ativo ? 'translate-x-5' : 'translate-x-0'"></span>
+                                        </button>
                                     </td>
                                     <td class="px-5 py-3.5 border border-slate-200 text-center space-x-2">
                                         <button x-show="can('clientes.editar')" type="button" @click="editarCliente(cliente)" class="text-blue-600 hover:text-blue-800 transition" title="Editar Cliente">
@@ -354,8 +356,36 @@
                         }
                     },
 
+                     async toggleAtivo(cliente) {
+                        const originalValue = cliente.ativo;
+                        cliente.ativo = !cliente.ativo;
+                        try {
+                            const response = await fiscalFetch('/api/clientes/' + cliente.id, {
+                                method: 'PUT',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': 'Bearer ' + localStorage.getItem('nfe_token')
+                                },
+                                body: JSON.stringify(cliente)
+                            });
+                            if (!response.ok) {
+                                throw new Error();
+                            }
+                            window.fiscalToast?.('success', `Cliente ${cliente.ativo ? 'ativado' : 'inativado'} com sucesso.`, 'Status');
+                        } catch (err) {
+                            cliente.ativo = originalValue;
+                            window.fiscalToast?.('error', 'Falha ao alterar status do cliente.', 'Erro');
+                        }
+                    },
+
                     async excluirCliente(cliente) {
-                        if (!confirm('Deseja realmente excluir o cliente ' + cliente.razao_social + '?')) {
+                        const confirmado = await window.fiscalConfirm?.({
+                            title: 'Excluir Cliente',
+                            message: 'Deseja realmente excluir o cliente ' + cliente.razao_social + '?',
+                            confirmText: 'Excluir',
+                            cancelText: 'Cancelar'
+                        });
+                        if (!confirmado) {
                             return;
                         }
                         try {

@@ -43,20 +43,22 @@
                                     <td class="px-5 py-3.5 border border-slate-200 text-slate-600 text-center" x-text="fornecedor.inscricao_estadual || 'Isento/Não informado'"></td>
                                     <td class="px-5 py-3.5 border border-slate-200 text-slate-600 text-center" x-text="fornecedor.municipio ? fornecedor.municipio + ' / ' + fornecedor.uf : 'Não informado'"></td>
                                     <td class="px-5 py-3.5 border border-slate-200 text-center">
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold" :class="fornecedor.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'" x-text="fornecedor.ativo ? 'Ativo' : 'Inativo'"></span>
-                                    </td>
-                                    <td class="px-5 py-3.5 border border-slate-200 text-center space-x-2">
-                                        <button x-show="can('fornecedores.editar')" type="button" @click="editarFornecedor(fornecedor)" class="text-blue-600 hover:text-blue-800 transition" title="Editar Fornecedor">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 inline">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                                            </svg>
-                                        </button>
-                                        <button x-show="can('fornecedores.excluir')" type="button" @click="excluirFornecedor(fornecedor)" class="text-red-600 hover:text-red-800 transition" title="Excluir Fornecedor">
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 inline">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                        </button>
-                                    </td>
+                                         <button type="button" @click="toggleAtivo(fornecedor)" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none" :class="fornecedor.ativo ? 'bg-emerald-500' : 'bg-slate-200'">
+                                             <span aria-hidden="true" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out" :class="fornecedor.ativo ? 'translate-x-5' : 'translate-x-0'"></span>
+                                         </button>
+                                     </td>
+                                     <td class="px-5 py-3.5 border border-slate-200 text-center space-x-2">
+                                         <button x-show="can('fornecedores.editar')" type="button" @click="editarFornecedor(fornecedor)" class="text-blue-600 hover:text-blue-800 transition" title="Editar Fornecedor">
+                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 inline">
+                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                                             </svg>
+                                         </button>
+                                         <button x-show="can('fornecedores.excluir')" type="button" @click="excluirFornecedor(fornecedor)" class="text-red-600 hover:text-red-800 transition" title="Excluir Fornecedor">
+                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 inline">
+                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                             </svg>
+                                         </button>
+                                     </td>
                                 </tr>
                             </template>
                             <tr x-show="!isLoading && !filteredFornecedores().length" x-cloak>
@@ -98,12 +100,21 @@
                     <div class="min-h-0 flex-1 overflow-y-auto p-5 space-y-4">
                         <div class="grid gap-4 md:grid-cols-2">
                             <label>
-                                <span class="label">Razão Social / Nome completo</span>
+                                <span class="label">Razão Social / Nome completo <b class="text-red-600">*</b></span>
                                 <input x-model="form.nome_razao_social" class="field" required placeholder="Ex: Distribuidora Brasil LTDA">
                             </label>
-                            <label>
-                                <span class="label">CPF ou CNPJ</span>
-                                <input x-model="form.documento" class="field" required placeholder="Apenas números">
+                            <label class="relative block">
+                                <span class="label">CPF ou CNPJ <b class="text-red-600">*</b></span>
+                                <input x-model="form.documento" 
+                                       x-mask:dynamic="form.documento.replace(/\D/g, '').length > 11 ? '99.999.999/9999-99' : '999.999.999-99'"
+                                       @input="if(form.documento && form.documento.replace(/\D/g, '').length === 14) buscarCNPJ()"
+                                       class="field pr-10" required placeholder="Ex: 00.000.000/0001-00 ou 000.000.000-00">
+                                <span x-show="buscandoCNPJ" x-cloak class="absolute right-3 top-9 flex h-5 w-5 items-center justify-center">
+                                    <svg class="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                    </svg>
+                                </span>
                             </label>
                         </div>
                         <div class="grid gap-4 md:grid-cols-2">
@@ -111,9 +122,18 @@
                                 <span class="label">Inscrição Estadual</span>
                                 <input x-model="form.inscricao_estadual" class="field" placeholder="Inscrição Estadual ou em branco se isento">
                             </label>
-                            <label>
+                            <label class="relative block">
                                 <span class="label">CEP</span>
-                                <input x-model="form.cep" class="field" placeholder="Ex: 01001000">
+                                <input x-model="form.cep" 
+                                       x-mask="99999-999"
+                                       @input="if(form.cep.replace(/\D/g, '').length === 8) buscarCEP()"
+                                       class="field pr-10" placeholder="Ex: 01001-000">
+                                <span x-show="buscandoCEP" x-cloak class="absolute right-3 top-9 flex h-5 w-5 items-center justify-center">
+                                    <svg class="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                    </svg>
+                                </span>
                             </label>
                         </div>
                         <div class="grid gap-4 md:grid-cols-3">
@@ -162,6 +182,8 @@
                     fornecedores: [],
                     isLoading: false,
                     modalAberto: false,
+                    buscandoCNPJ: false,
+                    buscandoCEP: false,
                     searchQuery: '',
                     currentPage: 1,
                     itemsPerPage: 10,
@@ -185,6 +207,52 @@
                         this.$watch('searchQuery', () => {
                             this.currentPage = 1;
                         });
+                    },
+
+                    async buscarCNPJ() {
+                        const cnpjClean = (this.form.documento || '').replace(/\D/g, '');
+                        if (cnpjClean.length !== 14 || this.buscandoCNPJ) return;
+                        this.buscandoCNPJ = true;
+                        try {
+                            const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjClean}`);
+                            if (res.ok) {
+                                const data = await res.json();
+                                this.form.nome_razao_social = data.razao_social || data.nome_fantasia || this.form.nome_razao_social;
+                                this.form.cep = data.cep || this.form.cep;
+                                this.form.logradouro = data.logradouro || this.form.logradouro;
+                                this.form.numero = data.numero || this.form.numero;
+                                this.form.complemento = data.complemento || this.form.complemento;
+                                this.form.bairro = data.bairro || this.form.bairro;
+                                this.form.municipio = data.municipio || this.form.municipio;
+                                this.form.uf = data.uf || this.form.uf;
+                                window.fiscalToast?.('success', 'Dados do CNPJ importados com sucesso!', 'BrasilAPI');
+                            }
+                        } catch (err) {
+                            console.error(err);
+                        } finally {
+                            this.buscandoCNPJ = false;
+                        }
+                    },
+
+                    async buscarCEP() {
+                        const cepClean = (this.form.cep || '').replace(/\D/g, '');
+                        if (cepClean.length !== 8 || this.buscandoCEP) return;
+                        this.buscandoCEP = true;
+                        try {
+                            const res = await fetch(`https://brasilapi.com.br/api/cep/v1/${cepClean}`);
+                            if (res.ok) {
+                                const data = await res.json();
+                                this.form.logradouro = data.street || this.form.logradouro;
+                                this.form.bairro = data.neighborhood || this.form.bairro;
+                                this.form.municipio = data.city || this.form.municipio;
+                                this.form.uf = data.state || this.form.uf;
+                                window.fiscalToast?.('success', 'Endereço atualizado pelo CEP!', 'BrasilAPI');
+                            }
+                        } catch (err) {
+                            console.error(err);
+                        } finally {
+                            this.buscandoCEP = false;
+                        }
                     },
 
                     filteredFornecedores() {
@@ -283,8 +351,36 @@
                         }
                     },
 
+                     async toggleAtivo(fornecedor) {
+                        const originalValue = fornecedor.ativo;
+                        fornecedor.ativo = !fornecedor.ativo;
+                        try {
+                            const response = await fiscalFetch('/api/fornecedores/' + fornecedor.id, {
+                                method: 'PUT',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': 'Bearer ' + localStorage.getItem('nfe_token')
+                                },
+                                body: JSON.stringify(fornecedor)
+                            });
+                            if (!response.ok) {
+                                throw new Error();
+                            }
+                            window.fiscalToast?.('success', `Fornecedor ${fornecedor.ativo ? 'ativado' : 'inativado'} com sucesso.`, 'Status');
+                        } catch (err) {
+                            fornecedor.ativo = originalValue;
+                            window.fiscalToast?.('error', 'Falha ao alterar status do fornecedor.', 'Erro');
+                        }
+                    },
+
                     async excluirFornecedor(fornecedor) {
-                        if (!confirm('Deseja realmente excluir o fornecedor ' + fornecedor.nome_razao_social + '?')) {
+                        const confirmado = await window.fiscalConfirm?.({
+                            title: 'Excluir Fornecedor',
+                            message: 'Deseja realmente excluir o fornecedor ' + fornecedor.nome_razao_social + '?',
+                            confirmText: 'Excluir',
+                            cancelText: 'Cancelar'
+                        });
+                        if (!confirmado) {
                             return;
                         }
                         try {
