@@ -7,7 +7,7 @@ defineEmits<{ close: [] }>()
 <template>
   <Teleport to="body">
     <Transition name="modal">
-      <div v-if="open" class="modal-backdrop" role="presentation" @mousedown.self="$emit('close')">
+      <div v-if="open" class="modal-backdrop" role="presentation">
         <section class="modal-card" :class="{ 'modal-card--wide': wide }" role="dialog" aria-modal="true" :aria-label="title">
           <header class="modal-header">
             <div><h2>{{ title }}</h2><p v-if="description">{{ description }}</p></div>

@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { TriangleAlert } from '@lucide/vue'
 import BaseModal from './BaseModal.vue'
-defineProps<{ open: boolean; title: string; message: string; loading?: boolean }>()
+withDefaults(defineProps<{ open: boolean; title: string; message: string; loading?: boolean; confirmLabel?: string; loadingLabel?: string; variant?: 'danger' | 'primary' }>(), {
+  confirmLabel: 'Sim, excluir',
+  loadingLabel: 'Excluindo...',
+  variant: 'danger',
+})
 defineEmits<{ close: []; confirm: [] }>()
 </script>
 
@@ -10,7 +14,7 @@ defineEmits<{ close: []; confirm: [] }>()
     <div class="confirm-message"><span><TriangleAlert :size="22" /></span><p>{{ message }}</p></div>
     <template #footer>
       <button class="button button--ghost" :disabled="loading" @click="$emit('close')">Cancelar</button>
-      <button class="button button--danger" :disabled="loading" @click="$emit('confirm')">{{ loading ? 'Excluindo…' : 'Sim, excluir' }}</button>
+      <button class="button" :class="variant === 'danger' ? 'button--danger' : 'button--primary'" :disabled="loading" @click="$emit('confirm')">{{ loading ? loadingLabel : confirmLabel }}</button>
     </template>
   </BaseModal>
 </template>

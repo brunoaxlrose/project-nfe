@@ -41,9 +41,11 @@ const page = ref(1)
 const meta = reactive({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 })
 const modalOpen = ref(false)
 const confirmOpen = ref(false)
+const discardConfirmOpen = ref(false)
 const selected = ref<Record<string, any> | null>(null)
 const form = reactive<Record<string, any>>({})
 const errors = ref<Record<string, string[]>>({})
+const initialFormSnapshot = ref('')
 const cepLoading = ref(false)
 const cepMessage = ref('')
 const documentLoading = ref(false)
@@ -247,6 +249,35 @@ function normalizedPayload(): Record<string, any> {
   return payload
 }
 
+function formSnapshot(): string {
+  const normalized: Record<string, any> = {}
+  for (const field of config.value.fields) {
+    const value = form[field.key]
+    if (field.type === 'checkbox') {
+      normalized[field.key] = Boolean(value)
+      continue
+    }
+    normalized[field.key] = normalizeTextValue(field.key, value).trim()
+  }
+
+  return JSON.stringify(normalized)
+}
+
+function closeModal(force = false) {
+  if (saving.value) return
+  if (!force && formSnapshot() !== initialFormSnapshot.value) {
+    discardConfirmOpen.value = true
+    return
+  }
+
+  modalOpen.value = false
+}
+
+function discardChanges() {
+  discardConfirmOpen.value = false
+  closeModal(true)
+}
+
 function validateFront(): boolean {
   const localErrors: Record<string, string[]> = {}
   for (const field of config.value.fields) {
@@ -289,7 +320,7 @@ function resetForm(row?: Record<string, any>) {
   documentMessage.value = ''
   Object.keys(form).forEach((key) => delete form[key])
   Object.assign(form, config.value.defaults, row || {})
-  errors.value = {}; selected.value = row || null; modalOpen.value = true
+  errors.value = {}; selected.value = row || null; modalOpen.value = true; initialFormSnapshot.value = formSnapshot()
 }
 function display(row: Record<string, any>, column: Column) {
   const value = row[column.key]
@@ -324,7 +355,7 @@ async function save() {
     const payload = normalizedPayload()
     const response = selected.value ? await api.put(`${config.value.endpoint}/${selected.value.id}`, payload) : await api.post(config.value.endpoint, payload)
     toast.show('success', response.data.message || `${config.value.singular} salvo com sucesso.`)
-    modalOpen.value = false; await load()
+    closeModal(true); await load()
   } catch (error) { const parsed = apiError(error); errors.value = parsed.errors; toast.show('error', parsed.message) } finally { saving.value = false }
 }
 async function remove() {
@@ -355,15 +386,16 @@ onMounted(load)
       <footer v-if="meta.total" class="pagination"><span>Mostrando {{ meta.from }}–{{ meta.to }} de {{ meta.total }}</span><div><button :disabled="meta.current_page <= 1" @click="changePage(meta.current_page - 1)"><ChevronLeft :size="17" /></button><span>Página {{ meta.current_page }} de {{ meta.last_page }}</span><button :disabled="meta.current_page >= meta.last_page" @click="changePage(meta.current_page + 1)"><ChevronRight :size="17" /></button></div></footer>
     </section>
 
-    <BaseModal :open="modalOpen" :title="selected ? `Editar ${config.singular}` : `Novo ${config.singular}`" description="Os campos com asterisco são obrigatórios." wide @close="modalOpen = false">
+    <BaseModal :open="modalOpen" :title="selected ? `Editar ${config.singular}` : `Novo ${config.singular}`" description="Os campos com asterisco são obrigatórios." wide @close="closeModal">
       <form id="catalog-form" class="modal-form-grid" @submit.prevent="save">
         <label v-for="field in config.fields" :key="field.key" :class="{ 'field-span-2': field.span === 2, 'checkbox-field': field.type === 'checkbox' }">
           <template v-if="field.type === 'checkbox'"><input v-model="form[field.key]" type="checkbox"><span>{{ field.label }}</span></template>
           <template v-else><span>{{ field.label }} <b v-if="field.required">*</b></span><select v-if="field.type === 'select'" v-model="form[field.key]"><option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option></select><textarea v-else-if="field.type === 'textarea'" v-model="form[field.key]" rows="3" :placeholder="field.placeholder || `Informe ${field.label.toLowerCase()}`" /><CurrencyInput v-else-if="field.type === 'currency'" v-model="form[field.key]" :placeholder="field.placeholder" /><input v-else :value="inputValue(field)" :type="field.type || 'text'" v-bind="inputAttrs(field)" :placeholder="field.placeholder || `Informe ${field.label.toLowerCase()}`" autocomplete="off" @input="handleInput(field, $event)"><small v-if="errors[field.key]">{{ errors[field.key][0] }}</small><small v-else-if="field.key === 'documento' && documentMessage" class="field-hint">{{ documentMessage }}</small><small v-else-if="field.key === 'cep' && cepMessage" class="field-hint">{{ cepMessage }}</small></template>
         </label>
       </form>
-      <template #footer><button class="button button--ghost" :disabled="saving" @click="modalOpen = false">Cancelar</button><button class="button button--primary" form="catalog-form" :disabled="saving">{{ saving ? 'Salvando…' : 'Salvar cadastro' }}</button></template>
+      <template #footer><button class="button button--ghost" :disabled="saving" @click="() => closeModal()">Cancelar</button><button class="button button--primary" form="catalog-form" :disabled="saving">{{ saving ? 'Salvando…' : 'Salvar cadastro' }}</button></template>
     </BaseModal>
+    <ConfirmModal :open="discardConfirmOpen" title="Descartar alterações?" message="Você possui dados preenchidos que ainda não foram salvos. Ao sair agora, essas informações serão perdidas." confirm-label="Sim, descartar" variant="primary" @close="discardConfirmOpen = false" @confirm="discardChanges" />
     <ConfirmModal :open="confirmOpen" :loading="deleting" :title="`Excluir ${config.singular}?`" :message="`Esta ação removerá “${selected?.[config.nameKey] || ''}”. Ela não poderá ser desfeita.`" @close="confirmOpen = false" @confirm="remove" />
   </div>
 </template>
