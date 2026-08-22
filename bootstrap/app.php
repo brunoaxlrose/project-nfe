@@ -58,6 +58,17 @@ return Application::configure(basePath: dirname(__DIR__))
                 'user_id' => $request->user()?->id,
             ]);
 
+            // O Render Free pode não exibir o arquivo de log do Laravel.
+            // Envia a exceção para stderr, que aparece diretamente no Runtime Log.
+            error_log(sprintf(
+                '[FiscalFlow] %s: %s em %s:%d | rota=%s',
+                $exception::class,
+                $exception->getMessage(),
+                $exception->getFile(),
+                $exception->getLine(),
+                $request->path(),
+            ));
+
             return response()->json([
                 'message' => 'Não foi possível concluir a operação agora. Tente novamente em alguns instantes.',
             ], 500);
