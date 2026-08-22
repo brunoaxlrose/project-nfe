@@ -17,7 +17,7 @@ async function submit() {
   errorMessage.value = ''; errors.value = {}
   try {
     await auth.login({ email: form.email, password: form.password })
-    await router.replace(String(route.query.redirect || '/dashboard'))
+    await router.replace(sessionStorage.getItem('subscription_blocked') === '1' ? '/pagamento' : String(route.query.redirect || '/dashboard'))
   } catch (error) {
     const parsed = apiError(error); errorMessage.value = parsed.message; errors.value = parsed.errors
   }

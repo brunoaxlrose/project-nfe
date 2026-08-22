@@ -9,6 +9,7 @@ use App\Http\Controllers\EmpresaConfiguracaoController;
 use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\MasterController;
 use App\Http\Controllers\MinhaAssinaturaController;
+use App\Http\Controllers\PixPagamentoController;
 use App\Http\Controllers\Api\ClienteController;
 use App\Http\Controllers\Api\FornecedorController;
 use App\Http\Controllers\Api\NaturezaOperacaoController;
@@ -20,6 +21,13 @@ Route::post('/auth/login', [AuthController::class, 'login'])
 // Cadastro público de empresas desativado.
 // Route::post('/auth/register', [RegisterController::class, 'store'])
 //     ->middleware(['json.payload', 'throttle:5,1']);
+
+Route::post('/pagamentos/pix', [PixPagamentoController::class, 'create'])
+    ->middleware(['jwt', 'json.payload', 'throttle:10,1']);
+Route::get('/pagamentos/opcoes', [PixPagamentoController::class, 'options'])
+    ->middleware(['jwt', 'throttle:30,1']);
+Route::post('/webhooks/asaas', [PixPagamentoController::class, 'webhook'])
+    ->middleware('throttle:120,1');
 
 Route::middleware(['jwt', 'subscription', 'json.payload'])->group(function (): void {
     Route::get('/destinatarios', [CatalogController::class, 'destinatarios'])->middleware('permission:clientes.visualizar');

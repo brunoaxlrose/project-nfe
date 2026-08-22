@@ -58,6 +58,24 @@ Essa área permite:
 
 Quando uma assinatura estiver vencida ou suspensa, o sistema impede o uso dos recursos protegidos e apresenta uma mensagem compreensível ao usuário.
 
+## Pix Asaas
+
+A integração de Pix usa cobranças do Asaas. Configure no `.env`:
+
+- `ASAAS_API_KEY`: chave de API da conta Asaas recebedora.
+- `ASAAS_BASE_URL`: use `https://api-sandbox.asaas.com/v3` para sandbox ou `https://api.asaas.com/v3` para produção.
+- `ASAAS_RENEWAL_PLAN_SLUG`: plano oferecido ao cliente bloqueado, hoje `legado-completo`.
+
+A chave de API fica no painel do Asaas em **Integrações > Chave de API**. Em sandbox, use o painel `https://sandbox.asaas.com/`; em produção, use a chave da conta real que receberá os pagamentos.
+
+Endpoints:
+
+- `POST /api/pagamentos/pix`, autenticado por JWT, com JSON `{ "id_plano": 1, "id_usuario": 1, "email": "comprador@example.com" }`. O backend ignora valores enviados pelo cliente e cobra o `valor_mensal` do plano permitido em `ASAAS_RENEWAL_PLAN_SLUG`.
+- `GET /api/pagamentos/opcoes`, autenticado por JWT, retorna apenas o plano de renovação permitido.
+- `POST /api/webhooks/asaas`, público para o Asaas. O webhook consulta `/payments/{id}` antes de liberar a assinatura.
+
+Cada cobrança é registrada em `asaas_pagamento` com `external_reference`, `asaas_payment_id`, QR Code Pix, status e payload bruto. O webhook usa `lockForUpdate` e `processado_em` para evitar liberar a mesma assinatura duas vezes.
+
 ## Segurança e organização
 
 - Separação das informações por empresa.

@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 
 Route::view('/login', 'spa')->name('login');
+Route::view('/pagamento', 'spa')->name('pagamento');
 // Cadastro público de empresas desativado.
 // Route::view('/register', 'spa')->name('register');
 Route::view('/', 'spa');

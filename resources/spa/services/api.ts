@@ -19,10 +19,16 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('nfe_token')
       localStorage.removeItem('nfe_user')
+      sessionStorage.removeItem('subscription_blocked')
       if (!window.location.pathname.startsWith('/login')) {
         sessionStorage.setItem('auth_message', 'Sua sessão expirou. Entre novamente para continuar.')
         window.location.assign('/login')
       }
+    }
+    const payload = error.response?.data as { code?: string } | undefined
+    if (error.response?.status === 403 && payload?.code === 'assinatura_bloqueada') {
+      sessionStorage.setItem('subscription_blocked', '1')
+      if (!window.location.pathname.startsWith('/pagamento')) window.location.assign('/pagamento')
     }
     return Promise.reject(error)
   },

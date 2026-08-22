@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\LoginRequest;
+use App\Models\Empresa;
 use App\Models\User;
 use App\Models\UsuarioAcesso;
 use App\Services\JwtService;
@@ -37,8 +38,18 @@ class AuthController extends Controller
             ], 403);
         }
 
-        if ($bloqueio = $this->empresaAccess->bloqueio($user)) {
-            return response()->json(['message' => $bloqueio, 'code' => 'assinatura_bloqueada'], 403);
+        $empresa = $user->master ? null : Empresa::query()->with('assinaturaVigente.plano')->find($user->id_empresa);
+        $assinaturaBloqueada = false;
+
+        if (!$user->master) {
+            if (!$empresa || !$empresa->ativa) {
+                return response()->json([
+                    'message' => 'O acesso desta empresa está suspenso. Entre em contato com o suporte.',
+                    'code' => 'empresa_suspensa',
+                ], 403);
+            }
+
+            $assinaturaBloqueada = !$empresa->assinaturaVigente || !$empresa->assinaturaVigente->plano;
         }
 
         try {
@@ -55,7 +66,8 @@ class AuthController extends Controller
             'token_type' => 'Bearer',
             'expires_in' => config('jwt.ttl') * 60,
             'access_token' => $this->jwt->issue($user),
-            'user' => $user->authPayload(),
+            'user' => array_merge($user->authPayload(), ['assinatura_bloqueada' => $assinaturaBloqueada]),
+            'code' => $assinaturaBloqueada ? 'assinatura_bloqueada' : null,
         ]);
     }
 

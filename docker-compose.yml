@@ -15,12 +15,15 @@ services:
       APP_ENV: production
       APP_DEBUG: "false"
       APP_URL: https://app.nfeblao.com.br
+      APP_TIMEZONE: ${APP_TIMEZONE:-America/Sao_Paulo}
+      TZ: ${APP_TIMEZONE:-America/Sao_Paulo}
       DB_CONNECTION: pgsql
       DB_HOST: db
       DB_PORT: "5432"
       DB_DATABASE: ${DB_DATABASE}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
+      DB_TIMEZONE: ${DB_TIMEZONE:-America/Sao_Paulo}
       CACHE_STORE: file
     volumes:
       - laravel_storage:/var/www/html/storage
@@ -40,6 +43,8 @@ services:
       POSTGRES_DB: ${DB_DATABASE}
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${APP_TIMEZONE:-America/Sao_Paulo}
+      PGTZ: ${DB_TIMEZONE:-America/Sao_Paulo}
     ports:
       - "${DB_EXTERNAL_PORT:-5433}:5432"
     volumes:

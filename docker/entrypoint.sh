@@ -46,14 +46,19 @@ set_env() {
 }
 
 set_env APP_KEY "$APP_KEY"
+set_env APP_TIMEZONE "${APP_TIMEZONE:-America/Sao_Paulo}"
 set_env DB_CONNECTION "${DB_CONNECTION:-pgsql}"
 set_env DB_HOST "${DB_HOST:-db}"
 set_env DB_PORT "${DB_PORT:-5432}"
 set_env DB_DATABASE "${DB_DATABASE:-nfe}"
 set_env DB_USERNAME "${DB_USERNAME:-nfe}"
 set_env DB_PASSWORD "${DB_PASSWORD:-}"
+set_env DB_TIMEZONE "${DB_TIMEZONE:-America/Sao_Paulo}"
 set_env CACHE_STORE "${CACHE_STORE:-file}"
 set_env JWT_SECRET "$JWT_SECRET"
+set_env ASAAS_API_KEY "${ASAAS_API_KEY:-}"
+set_env ASAAS_BASE_URL "${ASAAS_BASE_URL:-https://api-sandbox.asaas.com/v3}"
+set_env ASAAS_RENEWAL_PLAN_SLUG "${ASAAS_RENEWAL_PLAN_SLUG:-legado-completo}"
 
 php artisan config:clear
 php artisan migrate --force

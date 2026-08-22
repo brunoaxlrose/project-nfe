@@ -10,6 +10,7 @@ export interface AuthUser {
   id_perfil?: number
   is_master?: boolean
   modulos_plano?: string[]
+  assinatura_bloqueada?: boolean
 }
 
 export interface PaginationMeta {

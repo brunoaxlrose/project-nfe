@@ -13,12 +13,15 @@ services:
       APP_ENV: ${APP_ENV:-local}
       APP_DEBUG: ${APP_DEBUG:-false}
       APP_URL: ${APP_URL:-http://localhost:8000}
+      APP_TIMEZONE: ${APP_TIMEZONE:-America/Sao_Paulo}
+      TZ: ${APP_TIMEZONE:-America/Sao_Paulo}
       DB_CONNECTION: pgsql
       DB_HOST: db
       DB_PORT: 5432
       DB_DATABASE: ${DB_DATABASE:-nfe}
       DB_USERNAME: ${DB_USERNAME:-nfe}
       DB_PASSWORD: ${DB_PASSWORD:-change-me-before-production}
+      DB_TIMEZONE: ${DB_TIMEZONE:-America/Sao_Paulo}
       JWT_SECRET: ${JWT_SECRET:-}
       JWT_SECRET_FILE: ${JWT_SECRET_FILE:-}
     volumes:
@@ -45,6 +48,8 @@ services:
       POSTGRES_DB: ${DB_DATABASE:-nfe}
       POSTGRES_USER: ${DB_USERNAME:-nfe}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me-before-production}
+      TZ: ${APP_TIMEZONE:-America/Sao_Paulo}
+      PGTZ: ${DB_TIMEZONE:-America/Sao_Paulo}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

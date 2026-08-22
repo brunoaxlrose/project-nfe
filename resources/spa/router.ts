@@ -8,12 +8,14 @@ import NewInvoiceView from './views/NewInvoiceView.vue'
 import SettingsView from './views/SettingsView.vue'
 import UsersView from './views/UsersView.vue'
 import MasterView from './views/MasterView.vue'
+import PaymentBlockedView from './views/PaymentBlockedView.vue'
 import AppShell from './layouts/AppShell.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', component: AuthView, meta: { guest: true, mode: 'login' } },
+    { path: '/pagamento', component: PaymentBlockedView, meta: { auth: true, title: 'Renovação do plano' } },
     // Cadastro público de empresas desativado.
     // { path: '/register', component: AuthView, meta: { guest: true, mode: 'register' } },
     {
@@ -39,6 +41,7 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (to.meta.auth && !auth.authenticated) return { path: '/login', query: { redirect: to.fullPath } }
   if (to.meta.guest && auth.authenticated) return '/dashboard'
+  if (auth.authenticated && sessionStorage.getItem('subscription_blocked') === '1' && to.path !== '/pagamento') return '/pagamento'
   if (to.meta.permission && !auth.can(String(to.meta.permission))) return '/dashboard'
   if (to.meta.master && !auth.user?.is_master) return '/dashboard'
 })

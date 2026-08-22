@@ -22,6 +22,11 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const { data } = await api.post('/auth/login', credentials)
       persist(data.access_token, data.user)
+      if (data.code === 'assinatura_bloqueada' || data.user?.assinatura_bloqueada) {
+        sessionStorage.setItem('subscription_blocked', '1')
+      } else {
+        sessionStorage.removeItem('subscription_blocked')
+      }
     } finally {
       loading.value = false
     }
@@ -36,6 +41,7 @@ export const useAuthStore = defineStore('auth', () => {
       const { data } = await api.get('/auth/me')
       user.value = data.user
       localStorage.setItem('nfe_user', JSON.stringify(data.user))
+      sessionStorage.removeItem('subscription_blocked')
       return true
     } catch { return false }
   }
@@ -60,6 +66,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     localStorage.removeItem('nfe_token')
     localStorage.removeItem('nfe_user')
+    sessionStorage.removeItem('subscription_blocked')
   }
 
   return { token, user, loading, authenticated, permissions, login, refresh, can, logout }
