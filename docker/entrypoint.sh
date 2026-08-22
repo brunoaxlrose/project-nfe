@@ -6,9 +6,13 @@ set -eu
 key_file="/var/www/html/storage/app/.app_key"
 jwt_file="/var/www/html/storage/app/.jwt_secret"
 
-if [ -f "$key_file" ] && [ -s "$key_file" ]; then
+if [ -n "${APP_KEY:-}" ]; then
+  # Em produção, a variável do provedor deve ser a fonte de verdade.
+  # O arquivo só é usado quando APP_KEY não foi configurada.
+  :
+elif [ -f "$key_file" ] && [ -s "$key_file" ]; then
   APP_KEY="$(cat "$key_file")"
-elif [ -z "${APP_KEY:-}" ]; then
+else
   APP_KEY="base64:$(php -r 'echo base64_encode(random_bytes(32));')"
   printf '%s' "$APP_KEY" > "$key_file"
   chmod 600 "$key_file"
@@ -16,9 +20,12 @@ fi
 
 export APP_KEY
 
-if [ -f "$jwt_file" ] && [ -s "$jwt_file" ]; then
+if [ "$(printf '%s' "${JWT_SECRET:-}" | wc -c)" -ge 32 ]; then
+  # Em produção, o segredo configurado no Render tem prioridade.
+  :
+elif [ -f "$jwt_file" ] && [ -s "$jwt_file" ]; then
   JWT_SECRET="$(cat "$jwt_file")"
-elif [ "$(printf '%s' "${JWT_SECRET:-}" | wc -c)" -lt 32 ]; then
+else
   JWT_SECRET="$(php -r 'echo bin2hex(random_bytes(32));')"
   printf '%s' "$JWT_SECRET" > "$jwt_file"
   chmod 600 "$jwt_file"
