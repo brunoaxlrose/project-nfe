@@ -18,6 +18,7 @@ class StoreUsuarioRequest extends FormRequest
         $this->merge([
             'email' => mb_strtolower(trim((string) $this->input('email'))),
             'ativo' => $this->boolean('ativo', true),
+            'copiar_minhas_permissoes' => $this->boolean('copiar_minhas_permissoes', true),
         ]);
     }
 
@@ -29,11 +30,13 @@ class StoreUsuarioRequest extends FormRequest
             'nome' => ['required', 'string', 'min:2', 'max:120'],
             'email' => ['required', 'email:rfc', 'max:255', Rule::unique('usuario', 'email')],
             'id_perfil' => [
-                'required',
+                Rule::requiredIf(!$this->boolean('copiar_minhas_permissoes', true)),
+                'nullable',
                 'integer',
                 Rule::exists('perfil', 'id_perfil')->where('id_empresa', $empresaId),
             ],
             'ativo' => ['sometimes', 'boolean'],
+            'copiar_minhas_permissoes' => ['sometimes', 'boolean'],
             'permissoes_especificas' => ['sometimes', 'array'],
             'permissoes_especificas.*' => ['integer', Rule::exists('permissao', 'id_permissao')],
             'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],

@@ -6,6 +6,7 @@ use App\Http\Requests\LoginRequest;
 use App\Models\User;
 use App\Models\UsuarioAcesso;
 use App\Services\JwtService;
+use App\Services\EmpresaAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -14,7 +15,7 @@ use Throwable;
 
 class AuthController extends Controller
 {
-    public function __construct(private readonly JwtService $jwt)
+    public function __construct(private readonly JwtService $jwt, private readonly EmpresaAccessService $empresaAccess)
     {
     }
 
@@ -34,6 +35,10 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'Seu perfil de acesso ainda não foi configurado. Procure o administrador do sistema.',
             ], 403);
+        }
+
+        if ($bloqueio = $this->empresaAccess->bloqueio($user)) {
+            return response()->json(['message' => $bloqueio, 'code' => 'assinatura_bloqueada'], 403);
         }
 
         try {

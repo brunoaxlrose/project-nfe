@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Building2, ChevronDown, CircleGauge, FilePlus2, Files, LogOut, Menu, Package, PanelLeftClose, PanelLeftOpen, Settings2, Tags, Users, UserRound, X } from '@lucide/vue'
+import { Building2, ChevronDown, CircleGauge, Crown, FilePlus2, Files, LogOut, Menu, Package, PanelLeftClose, PanelLeftOpen, Settings2, Tags, Users, UserRound, X } from '@lucide/vue'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
@@ -52,8 +52,13 @@ onMounted(() => auth.refresh())
         <p class="nav-eyebrow nav-eyebrow--space">Administração</p>
         <RouterLink v-if="auth.can('menu.usuarios')" to="/dashboard/usuarios"><Users :size="19" /><span>Usuários</span></RouterLink>
         <RouterLink v-if="auth.can('menu.configuracoes')" to="/dashboard/configuracoes"><Settings2 :size="19" /><span>Configurações</span></RouterLink>
+        <template v-if="auth.user?.is_master">
+          <p class="nav-eyebrow nav-eyebrow--space">Plataforma</p>
+          <RouterLink to="/dashboard/master"><Crown :size="19" /><span>Empresas e planos</span></RouterLink>
+        </template>
       </nav>
-      <div class="sidebar-foot" :class="{ production: environment === 1 }" :title="`SEFAZ: ${environmentLabel}`"><span class="environment-dot" /><div><strong>{{ environmentLabel }}</strong><small>{{ environment === 1 ? 'SEFAZ · valor fiscal' : 'SEFAZ · sem valor fiscal' }}</small></div></div>
+      <div v-if="auth.user?.is_master" class="sidebar-foot master-environment" title="Administração global da plataforma"><Crown :size="16" /><div><strong>Conta MASTER</strong><small>Controle global SaaS</small></div></div>
+      <div v-else class="sidebar-foot" :class="{ production: environment === 1 }" :title="`SEFAZ: ${environmentLabel}`"><span class="environment-dot" /><div><strong>{{ environmentLabel }}</strong><small>{{ environment === 1 ? 'SEFAZ · valor fiscal' : 'SEFAZ · sem valor fiscal' }}</small></div></div>
     </aside>
 
     <section class="main-area">

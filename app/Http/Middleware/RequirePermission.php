@@ -6,9 +6,12 @@ use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use App\Services\EmpresaAccessService;
 
 class RequirePermission
 {
+    public function __construct(private readonly EmpresaAccessService $access) {}
+
     public function handle(Request $request, Closure $next, string ...$permissions): Response
     {
         $user = $request->user();
@@ -33,6 +36,15 @@ class RequirePermission
             return response()->json([
                 'message' => 'Você não possui permissão para realizar esta ação.',
             ], 403);
+        }
+
+        foreach ($permissions as $permission) {
+            if (!$this->access->moduloPermitido($user, $permission)) {
+                return response()->json([
+                    'message' => 'Este módulo não faz parte do plano contratado pela empresa.',
+                    'code' => 'modulo_nao_contratado',
+                ], 403);
+            }
         }
 
         return $next($request);

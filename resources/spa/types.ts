@@ -6,6 +6,10 @@ export interface AuthUser {
   perfil?: string | { nome?: string; slug?: string }
   permissions?: string[]
   ambiente_sefaz?: number
+  perfil_id?: number
+  id_perfil?: number
+  is_master?: boolean
+  modulos_plano?: string[]
 }
 
 export interface PaginationMeta {

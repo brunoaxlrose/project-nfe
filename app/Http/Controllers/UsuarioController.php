@@ -37,11 +37,25 @@ class UsuarioController extends Controller
         $empresaId = (int) $request->user()->id_empresa;
         $data = $request->validated();
 
-        $usuario = DB::transaction(function () use ($data, $empresaId): Usuario {
-            $perfil = Perfil::query()->findOrFail($data['id_perfil']);
+        $limite = $request->user()->empresa?->assinaturaVigente?->plano?->limite_usuarios;
+        if (($data['ativo'] ?? true) && $limite !== null && Usuario::query()->where('id_empresa', $empresaId)->where('ativo', true)->count() >= $limite) {
+            throw ValidationException::withMessages([
+                'email' => "O plano atual permite no máximo {$limite} usuário(s). Altere o plano antes de adicionar outro usuário.",
+            ]);
+        }
+
+        $criador = $request->user()->loadMissing('permissoesDiretas');
+        $copiarAcessos = (bool) ($data['copiar_minhas_permissoes'] ?? true);
+        $perfilId = $copiarAcessos ? (int) $criador->id_perfil : (int) $data['id_perfil'];
+        $permissoesDiretas = $copiarAcessos
+            ? $criador->permissoesDiretas->pluck('id_permissao')->all()
+            : ($data['permissoes_especificas'] ?? []);
+
+        $usuario = DB::transaction(function () use ($data, $empresaId, $perfilId, $permissoesDiretas): Usuario {
+            $perfil = Perfil::query()->findOrFail($perfilId);
             $usuario = Usuario::query()->create([
                 'id_empresa' => $empresaId,
-                'id_perfil' => $data['id_perfil'],
+                'id_perfil' => $perfilId,
                 'nome' => $data['nome'],
                 'email' => $data['email'],
                 'password' => Hash::make($data['password']),
@@ -49,7 +63,7 @@ class UsuarioController extends Controller
                 'ativo' => (bool) ($data['ativo'] ?? true),
             ]);
 
-            $usuario->permissoesDiretas()->sync($data['permissoes_especificas'] ?? []);
+            $usuario->permissoesDiretas()->sync($permissoesDiretas);
 
             return $usuario->load(['perfilAcesso', 'permissoesDiretas']);
         });
@@ -63,6 +77,17 @@ class UsuarioController extends Controller
     public function update(UpdateUsuarioRequest $request, Usuario $usuario): JsonResponse
     {
         $data = $request->validated();
+
+        $vaiAtivar = (bool) ($data['ativo'] ?? true) && !$usuario->ativo;
+        $limite = $request->user()->empresa?->assinaturaVigente?->plano?->limite_usuarios;
+        if ($vaiAtivar && $limite !== null && Usuario::query()
+            ->where('id_empresa', (int) $request->user()->id_empresa)
+            ->where('ativo', true)
+            ->count() >= $limite) {
+            throw ValidationException::withMessages([
+                'ativo' => "O plano atual permite no máximo {$limite} usuário(s) ativo(s). Desative outro acesso ou altere o plano antes de reativar este usuário.",
+            ]);
+        }
 
         DB::transaction(function () use ($usuario, $data): void {
             $perfil = Perfil::query()->findOrFail($data['id_perfil']);

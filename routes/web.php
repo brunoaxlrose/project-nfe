@@ -15,3 +15,9 @@ Route::view('/dashboard/fornecedores', 'spa')->name('fornecedores.index');
 Route::view('/dashboard/clientes', 'spa')->name('clientes.index');
 Route::view('/dashboard/naturezas', 'spa')->name('naturezas.index');
 Route::view('/dashboard/produtos', 'spa')->name('produtos.index');
+
+// Fallback do SPA: ao atualizar uma rota interna, entrega a aplicação para o
+// Vue Router resolver a página. Restrito a /dashboard para não capturar /api.
+Route::view('/dashboard/{path?}', 'spa')
+    ->where('path', '.*')
+    ->name('spa.dashboard');

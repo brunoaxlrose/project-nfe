@@ -7,6 +7,7 @@ import InvoicesView from './views/InvoicesView.vue'
 import NewInvoiceView from './views/NewInvoiceView.vue'
 import SettingsView from './views/SettingsView.vue'
 import UsersView from './views/UsersView.vue'
+import MasterView from './views/MasterView.vue'
 import AppShell from './layouts/AppShell.vue'
 
 const router = createRouter({
@@ -26,6 +27,7 @@ const router = createRouter({
         { path: 'nfe/nova', component: NewInvoiceView, meta: { permission: 'nfe.criar' } },
         { path: 'configuracoes', component: SettingsView, meta: { permission: 'menu.configuracoes' } },
         { path: 'usuarios', component: UsersView, meta: { permission: 'menu.usuarios' } },
+        { path: 'master', component: MasterView, meta: { master: true, title: 'Gestão da plataforma' } },
       ],
     },
     { path: '/', redirect: '/dashboard' },
@@ -38,6 +40,7 @@ router.beforeEach(async (to) => {
   if (to.meta.auth && !auth.authenticated) return { path: '/login', query: { redirect: to.fullPath } }
   if (to.meta.guest && auth.authenticated) return '/dashboard'
   if (to.meta.permission && !auth.can(String(to.meta.permission))) return '/dashboard'
+  if (to.meta.master && !auth.user?.is_master) return '/dashboard'
 })
 
 export default router

@@ -57,4 +57,7 @@ set_env JWT_SECRET "$JWT_SECRET"
 
 php artisan config:clear
 php artisan migrate --force
+if [ -n "${MASTER_EMAIL:-}" ] && [ -n "${MASTER_PASSWORD:-}" ]; then
+  php artisan fiscalflow:provision-master --no-interaction
+fi
 exec php artisan serve --host=0.0.0.0 --port="${PORT:-8000}"

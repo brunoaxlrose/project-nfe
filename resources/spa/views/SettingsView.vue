@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { Building2, CheckCircle2, FileKey2, ImagePlus, RadioTower, Save, ShieldCheck, SlidersHorizontal, Trash2 } from '@lucide/vue'
+import { computed, onMounted, reactive, ref, type Component } from 'vue'
+import { Boxes, Building2, CalendarDays, CheckCircle2, CreditCard, FileKey2, ImagePlus, RadioTower, Save, ShieldCheck, SlidersHorizontal, Trash2, UsersRound } from '@lucide/vue'
 import { api, apiError } from '../services/api'
 import { useToastStore } from '../stores/toast'
 import { useAuthStore } from '../stores/auth'
@@ -12,17 +12,36 @@ const loading = ref(true)
 const saving = ref(false)
 const testing = ref(false)
 const removeOpen = ref(false)
-const activeTab = ref<'empresa' | 'fiscal' | 'seguranca'>('empresa')
+type SettingsTab = 'empresa' | 'fiscal' | 'seguranca' | 'plano'
+const activeTab = ref<SettingsTab>('empresa')
+const planData = ref<Record<string, any> | null>(null)
 const logo = ref<File | null>(null)
 const certificate = ref<File | null>(null)
 const errors = ref<Record<string, string[]>>({})
 const form = reactive<Record<string, any>>({ ambiente: 2, crt: 1, serie_padrao: 1, cfop_padrao: '5102', inscricao_estadual_isento: false })
 const logoPreview = computed(() => logo.value ? URL.createObjectURL(logo.value) : form.logo_data_url)
-const tabs = [{ id: 'empresa', label: 'Empresa', icon: Building2 }, { id: 'fiscal', label: 'Fiscal e emissão', icon: SlidersHorizontal }, { id: 'seguranca', label: 'Certificado e segurança', icon: ShieldCheck }] as const
+const tabs = computed<Array<{ id: SettingsTab; label: string; icon: Component }>>(() => [
+  { id: 'empresa', label: 'Empresa', icon: Building2 },
+  { id: 'fiscal', label: 'Fiscal e emissão', icon: SlidersHorizontal },
+  { id: 'seguranca', label: 'Certificado e segurança', icon: ShieldCheck },
+  ...(!auth.user?.is_master ? [{ id: 'plano', label: 'Meu plano', icon: CreditCard }] : []),
+] as Array<{ id: SettingsTab; label: string; icon: Component }>)
+const moduleLabels: Record<string, string> = { '*': 'Todos os módulos', nfe: 'Notas fiscais', clientes: 'Clientes', fornecedores: 'Fornecedores', produtos: 'Produtos', naturezas: 'Naturezas de operação', usuarios: 'Usuários e permissões', configuracoes: 'Configurações e certificado' }
+const planStatus = computed(() => ({ ativa: 'Ativo', teste: 'Período de teste', suspensa: 'Suspenso', cancelada: 'Cancelado', substituida: 'Substituído' } as Record<string, string>)[String(planData.value?.assinatura?.status || '')] || 'Não definido')
+const userUsage = computed(() => { const used = Number(planData.value?.uso?.usuarios || 0); const limit = planData.value?.plano?.limite_usuarios; return { used, limit, percent: limit ? Math.min(100, Math.round((used / Number(limit)) * 100)) : 0 } })
+const money = (value: unknown) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const dateLabel = (value?: string) => value ? new Intl.DateTimeFormat('pt-BR').format(new Date(value)) : 'Sem vencimento definido'
 
 async function load() {
   loading.value = true
-  try { Object.assign(form, (await api.get('/configuracoes-emissor')).data) }
+  try {
+    const configResponse = await api.get('/configuracoes-emissor')
+    Object.assign(form, configResponse.data)
+    if (!auth.user?.is_master) {
+      try { planData.value = (await api.get('/minha-assinatura')).data }
+      catch (error) { toast.show('warning', apiError(error).message, 'Meu plano') }
+    }
+  }
   catch (error) { toast.show('error', apiError(error).message) } finally { loading.value = false }
 }
 function digits(value: unknown) { return String(value || '').replace(/\D/g, '') }
@@ -55,7 +74,7 @@ onMounted(load)
 
 <template>
   <div>
-    <header class="page-heading"><div><span class="eyebrow">Administração</span><h1>Configurações</h1><p>Dados empresariais, preferências fiscais e credenciais de emissão.</p></div><button class="button button--primary" :disabled="saving || loading" @click="save"><Save :size="18" />{{ saving ? 'Salvando…' : 'Salvar alterações' }}</button></header>
+    <header class="page-heading"><div><span class="eyebrow">Administração</span><h1>Configurações</h1><p>Dados empresariais, preferências fiscais, segurança e informações do plano.</p></div><button v-if="activeTab !== 'plano'" class="button button--primary" :disabled="saving || loading" @click="save"><Save :size="18" />{{ saving ? 'Salvando…' : 'Salvar alterações' }}</button></header>
     <div class="settings-layout">
       <aside class="settings-nav panel"><button v-for="tab in tabs" :key="tab.id" :class="{ active: activeTab === tab.id }" @click="activeTab = tab.id"><component :is="tab.icon" :size="18" /><span>{{ tab.label }}</span></button></aside>
       <section class="panel settings-panel" :class="{ 'is-loading': loading }">
@@ -66,7 +85,15 @@ onMounted(load)
           </div>
         </div>
         <div v-else-if="activeTab === 'fiscal'" class="settings-section"><header><span class="settings-icon"><SlidersHorizontal :size="21" /></span><div><h2>Preferências fiscais</h2><p>Padrões usados para agilizar novas emissões.</p></div></header><div class="settings-form"><label><span>Ambiente SEFAZ *</span><select v-model="form.ambiente"><option :value="2">Homologação</option><option :value="1">Produção</option></select></label><label><span>Regime tributário (CRT) *</span><select v-model="form.crt"><option :value="1">Simples Nacional</option><option :value="2">Simples — excesso sublimite</option><option :value="3">Regime Normal</option><option :value="4">MEI</option></select></label><label><span>Série padrão *</span><input v-model.number="form.serie_padrao" type="number" min="1" max="999" placeholder="1"></label><label><span>Próximo número</span><input v-model.number="form.proximo_numero" type="number" min="1" placeholder="Próximo número da NF-e"></label><label><span>CFOP padrão *</span><input v-model="form.cfop_padrao" maxlength="4" placeholder="Ex.: 5901"><small v-if="errors.cfop_padrao">{{ errors.cfop_padrao[0] }}</small></label><label><span>CSOSN padrão</span><input v-model="form.csosn_padrao" maxlength="4" placeholder="Ex.: 0400"></label><div class="environment-warning field-span-2" :class="{ production: Number(form.ambiente) === 1 }"><RadioTower :size="20" /><div><strong>{{ Number(form.ambiente) === 1 ? 'Ambiente de produção' : 'Ambiente de homologação' }}</strong><p>{{ Number(form.ambiente) === 1 ? 'As notas emitidas possuem valor fiscal. Confira todos os dados antes de transmitir.' : 'Indicado para testes. Os documentos emitidos não possuem valor fiscal.' }}</p></div></div></div></div>
-        <div v-else class="settings-section"><header><span class="settings-icon"><FileKey2 :size="21" /></span><div><h2>Certificado digital A1</h2><p>Credencial protegida usada para assinar e transmitir documentos.</p></div></header><div class="certificate-status" :class="{ configured: form.certificado_configurado }"><span><CheckCircle2 v-if="form.certificado_configurado" :size="23" /><FileKey2 v-else :size="23" /></span><div><strong>{{ form.certificado_configurado ? 'Certificado configurado' : 'Nenhum certificado configurado' }}</strong><p v-if="form.certificado_dono">{{ form.certificado_dono }}</p><small v-if="form.certificado_validade">Validade: {{ new Date(form.certificado_validade).toLocaleDateString('pt-BR') }}</small></div></div><div class="settings-form certificate-form"><label class="field-span-2"><span>Arquivo do certificado (.pfx ou .p12)</span><input type="file" accept=".pfx,.p12" @change="chooseFile($event, 'certificate')"><small v-if="certificate">Selecionado: {{ certificate.name }}</small><small v-if="errors.certificado">{{ errors.certificado[0] }}</small></label><label class="field-span-2"><span>Senha do certificado</span><input v-model="form.certificado_senha" type="password" autocomplete="new-password" placeholder="Senha do certificado A1"><small v-if="errors.certificado_senha">{{ errors.certificado_senha[0] }}</small></label></div><div class="security-actions"><button class="button button--ghost" :disabled="testing || !form.certificado_configurado" @click="testConnection"><RadioTower :size="17" />{{ testing ? 'Testando…' : 'Testar comunicação' }}</button><button v-if="form.certificado_configurado" class="button danger-outline" @click="removeOpen = true"><Trash2 :size="17" /> Remover certificado</button></div></div>
+        <div v-else-if="activeTab === 'seguranca'" class="settings-section"><header><span class="settings-icon"><FileKey2 :size="21" /></span><div><h2>Certificado digital A1</h2><p>Credencial protegida usada para assinar e transmitir documentos.</p></div></header><div class="certificate-status" :class="{ configured: form.certificado_configurado }"><span><CheckCircle2 v-if="form.certificado_configurado" :size="23" /><FileKey2 v-else :size="23" /></span><div><strong>{{ form.certificado_configurado ? 'Certificado configurado' : 'Nenhum certificado configurado' }}</strong><p v-if="form.certificado_dono">{{ form.certificado_dono }}</p><small v-if="form.certificado_validade">Validade: {{ new Date(form.certificado_validade).toLocaleDateString('pt-BR') }}</small></div></div><div class="settings-form certificate-form"><label class="field-span-2"><span>Arquivo do certificado (.pfx ou .p12)</span><input type="file" accept=".pfx,.p12" @change="chooseFile($event, 'certificate')"><small v-if="certificate">Selecionado: {{ certificate.name }}</small><small v-if="errors.certificado">{{ errors.certificado[0] }}</small></label><label class="field-span-2"><span>Senha do certificado</span><input v-model="form.certificado_senha" type="password" autocomplete="new-password" placeholder="Senha do certificado A1"><small v-if="errors.certificado_senha">{{ errors.certificado_senha[0] }}</small></label></div><div class="security-actions"><button class="button button--ghost" :disabled="testing || !form.certificado_configurado" @click="testConnection"><RadioTower :size="17" />{{ testing ? 'Testando…' : 'Testar comunicação' }}</button><button v-if="form.certificado_configurado" class="button danger-outline" @click="removeOpen = true"><Trash2 :size="17" /> Remover certificado</button></div></div>
+        <div v-else class="settings-section plan-section"><header><span class="settings-icon"><CreditCard :size="21" /></span><div><h2>Meu plano</h2><p>Detalhes da contratação e dos recursos liberados para sua empresa.</p></div><span v-if="planData?.assinatura" class="plan-status" :class="planData.assinatura.status">{{ planStatus }}</span></header>
+          <template v-if="planData?.plano"><div class="plan-hero"><div><span>Plano atual</span><h3>{{ planData.plano.nome }}</h3><p>{{ planData.plano.descricao || 'Plano FiscalFlow contratado pela empresa.' }}</p></div><strong>{{ money(planData.plano.valor_mensal) }}<small>/mês</small></strong></div>
+            <div class="plan-detail-grid"><article><span><CalendarDays :size="18" /></span><div><small>Início da vigência</small><strong>{{ dateLabel(planData.assinatura?.inicia_em) }}</strong></div></article><article><span><CalendarDays :size="18" /></span><div><small>Fim da vigência</small><strong>{{ dateLabel(planData.assinatura?.termina_em) }}</strong><em v-if="planData.assinatura?.dias_restantes !== null">{{ planData.assinatura.dias_restantes }} dia(s) restante(s)</em></div></article><article><span><UsersRound :size="18" /></span><div><small>Usuários utilizados</small><strong>{{ userUsage.used }} de {{ userUsage.limit || 'ilimitados' }}</strong><div v-if="userUsage.limit" class="usage-bar"><i :style="{ width: `${userUsage.percent}%` }" /></div></div></article></div>
+            <div v-if="planData.assinatura?.carencia_ate" class="grace-notice"><CalendarDays :size="18" /><div><strong>Período de carência</strong><p>Em caso de vencimento, o acesso permanece disponível até {{ dateLabel(planData.assinatura.carencia_ate) }}.</p></div></div>
+            <div class="plan-modules-view"><div><Boxes :size="19" /><span><strong>Módulos liberados</strong><small>Recursos disponíveis no plano atual.</small></span></div><ul><li v-for="module in planData.plano.modulos" :key="module"><CheckCircle2 :size="16" />{{ moduleLabels[module] || module }}</li></ul></div>
+            <p class="plan-help">Para alterar o plano, ampliar usuários ou renovar a vigência, entre em contato com o responsável comercial do FiscalFlow.</p>
+          </template><div v-else class="plan-empty"><CreditCard :size="28" /><strong>Nenhum plano encontrado</strong><p>Entre em contato com o suporte para regularizar o acesso da empresa.</p></div>
+        </div>
       </section>
     </div>
     <ConfirmModal :open="removeOpen" title="Remover certificado?" message="A emissão ficará indisponível até que um novo certificado A1 seja configurado." @close="removeOpen = false" @confirm="removeCertificate" />

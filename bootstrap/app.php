@@ -7,6 +7,8 @@ use App\Http\Middleware\AuthenticateJwt;
 use App\Http\Middleware\EnsureJsonPayload;
 use App\Http\Middleware\RequirePermission;
 use App\Http\Middleware\RequireRole;
+use App\Http\Middleware\RequireMaster;
+use App\Http\Middleware\EnsureEmpresaSubscription;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -26,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'json.payload' => EnsureJsonPayload::class,
             'permission' => RequirePermission::class,
             'role' => RequireRole::class,
+            'master' => RequireMaster::class,
+            'subscription' => EnsureEmpresaSubscription::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

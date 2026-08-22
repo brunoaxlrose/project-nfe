@@ -7,6 +7,8 @@ use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\EmpresaConfiguracaoController;
 // use App\Http\Controllers\RegisterController; // Cadastro público desativado.
 use App\Http\Controllers\UsuarioController;
+use App\Http\Controllers\MasterController;
+use App\Http\Controllers\MinhaAssinaturaController;
 use App\Http\Controllers\Api\ClienteController;
 use App\Http\Controllers\Api\FornecedorController;
 use App\Http\Controllers\Api\NaturezaOperacaoController;
@@ -19,7 +21,7 @@ Route::post('/auth/login', [AuthController::class, 'login'])
 // Route::post('/auth/register', [RegisterController::class, 'store'])
 //     ->middleware(['json.payload', 'throttle:5,1']);
 
-Route::middleware(['jwt', 'json.payload'])->group(function (): void {
+Route::middleware(['jwt', 'subscription', 'json.payload'])->group(function (): void {
     Route::get('/destinatarios', [CatalogController::class, 'destinatarios'])->middleware('permission:clientes.visualizar');
     Route::get('/destinatarios/buscar', [CatalogController::class, 'destinatariosBuscar'])->middleware('permission:clientes.visualizar');
     
@@ -76,8 +78,9 @@ Route::middleware(['jwt', 'json.payload'])->group(function (): void {
         ->middleware('permission:nfe.cce');
 });
 
-Route::middleware(['jwt'])->group(function (): void {
+Route::middleware(['jwt', 'subscription'])->group(function (): void {
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::get('/minha-assinatura', [MinhaAssinaturaController::class, 'show']);
     Route::get('/configuracoes-emissor', [EmpresaConfiguracaoController::class, 'show'])->middleware('permission:configuracoes.visualizar');
     Route::post('/configuracoes-emissor', [EmpresaConfiguracaoController::class, 'update'])->middleware('permission:configuracoes.editar');
     Route::post('/configuracoes-emissor/testar-comunicacao', [EmpresaConfiguracaoController::class, 'testarComunicacao'])->middleware('permission:configuracoes.editar');
@@ -92,4 +95,14 @@ Route::middleware(['jwt'])->group(function (): void {
     Route::post('/perfis/{perfil}/usuarios', [UsuarioController::class, 'adicionarUsuarioPerfil'])->middleware('permission:perfis.gerenciar');
     Route::delete('/perfis/{perfil}/usuarios/{usuario}', [UsuarioController::class, 'removerUsuarioPerfil'])->middleware('permission:perfis.gerenciar');
     Route::put('/perfis/{perfil}/permissoes', [UsuarioController::class, 'atualizarPermissoes'])->middleware('permission:perfis.gerenciar');
+});
+
+Route::prefix('master')->middleware(['jwt', 'master', 'json.payload'])->group(function (): void {
+    Route::get('/overview', [MasterController::class, 'overview']);
+    Route::post('/empresas', [MasterController::class, 'storeEmpresa']);
+    Route::put('/empresas/{empresa}', [MasterController::class, 'updateEmpresa']);
+    Route::post('/planos', [MasterController::class, 'storePlano']);
+    Route::put('/planos/{plano}', [MasterController::class, 'updatePlano']);
+    Route::patch('/planos/{plano}/status', [MasterController::class, 'togglePlano']);
+    Route::delete('/planos/{plano}', [MasterController::class, 'destroyPlano']);
 });

@@ -26,6 +26,7 @@ class User extends Authenticatable
         'password',
         'perfil',
         'ativo',
+        'master',
     ];
 
     protected $hidden = [
@@ -36,6 +37,7 @@ class User extends Authenticatable
     protected $casts = [
         'password' => 'hashed',
         'ativo' => 'boolean',
+        'master' => 'boolean',
     ];
     protected $appends = ['id', 'empresa_id', 'perfil_id', 'name', 'active'];
 
@@ -98,6 +100,9 @@ class User extends Authenticatable
 
     public function temPermissao(string $slug): bool
     {
+        if ($this->master) {
+            return true;
+        }
         if (!$this->active || !$this->id_perfil) {
             return false;
         }
@@ -126,6 +131,9 @@ class User extends Authenticatable
 
     public function permissoesSlugs(): array
     {
+        if ($this->master) {
+            return collect(\App\Services\RbacService::PERMISSIONS)->pluck('slug')->push('master.gerenciar')->all();
+        }
         $profile = $this->perfilAcesso;
 
         if (!$profile || (int) $profile->id_empresa !== (int) $this->id_empresa) {
@@ -168,6 +176,10 @@ class User extends Authenticatable
             'perfil_slug' => $profile?->slug,
             'permissions' => $this->permissoesSlugs(),
             'ambiente_sefaz' => $ambienteSefaz,
+            'is_master' => (bool) $this->master,
+            'modulos_plano' => $this->master
+                ? ['*']
+                : ($this->empresa?->assinaturaVigente?->plano?->modulos ?? []),
         ];
     }
 }

@@ -41,7 +41,18 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function can(permission?: string) {
-    return !permission || permissions.value.includes(permission)
+    if (user.value?.is_master || !permission) return true
+    if (!permissions.value.includes(permission)) return false
+    const module = permission.startsWith('nfe.') || permission === 'menu.nfe' ? 'nfe'
+      : permission.startsWith('clientes.') ? 'clientes'
+      : permission.startsWith('fornecedores.') ? 'fornecedores'
+      : permission.startsWith('produtos.') ? 'produtos'
+      : permission.startsWith('naturezas.') ? 'naturezas'
+      : permission.startsWith('usuarios.') || permission.startsWith('perfis.') || permission === 'menu.usuarios' ? 'usuarios'
+      : permission.startsWith('configuracoes.') || permission.startsWith('certificado.') || permission === 'menu.configuracoes' ? 'configuracoes'
+      : null
+    const modules = user.value?.modulos_plano || []
+    return !module || modules.includes('*') || modules.includes(module)
   }
 
   function logout() {

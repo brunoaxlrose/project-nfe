@@ -34,4 +34,19 @@ class Empresa extends Model
     {
         return $this->hasOne(ConfiguracaoEmissor::class, 'id_empresa', 'id_empresa');
     }
+
+    public function assinaturas(): HasMany
+    {
+        return $this->hasMany(EmpresaAssinatura::class, 'id_empresa', 'id_empresa');
+    }
+
+    public function assinaturaAtual(): HasOne
+    {
+        return $this->hasOne(EmpresaAssinatura::class, 'id_empresa', 'id_empresa')->latestOfMany('id_empresa_assinatura');
+    }
+
+    public function assinaturaVigente(): HasOne
+    {
+        return $this->hasOne(EmpresaAssinatura::class, 'id_empresa', 'id_empresa')->vigente()->latestOfMany('id_empresa_assinatura');
+    }
 }
