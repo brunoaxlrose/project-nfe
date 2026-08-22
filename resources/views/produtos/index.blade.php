@@ -168,8 +168,8 @@
                         ncm: '',
                         unidade: 'UN',
                         valor_unitario: 0.00,
-                        cfop: '',
-                        csosn: '',
+                        cfop: '5901',
+                        csosn: '0400',
                         cst: '',
                         ativo: true
                     },
@@ -231,8 +231,8 @@
                             ncm: '',
                             unidade: 'UN',
                             valor_unitario: 0.00,
-                            cfop: '',
-                            csosn: '',
+                            cfop: '5901',
+                            csosn: '0400',
                             cst: '',
                             ativo: true
                         };

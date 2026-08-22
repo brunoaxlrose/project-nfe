@@ -9,6 +9,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+    <link rel="alternate icon" href="{{ asset('favicon.svg') }}">
     <title>{{ $title ?? 'FiscalFlow' }} · FiscalFlow</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -89,6 +91,7 @@
                     this.sidebarCollapsed = localStorage.getItem('fiscalflow_sidebar_collapsed') === '1';
                     this.$nextTick(() => this.bootstrap());
                     this.refreshAccess();
+                    this.refreshSefazEnvironment();
                     this.$el.addEventListener('click', (event) => this.interceptNavigation(event));
                     window.addEventListener('popstate', () => {
                         const route = this.routeFor(window.location.href);
@@ -159,6 +162,30 @@
                     } catch (error) {
                         if (!error.authExpired) {
                             window.fiscalToast?.('warning', 'Não foi possível atualizar suas permissões agora.', 'Controle de acesso');
+                        }
+                    }
+                },
+                async refreshSefazEnvironment() {
+                    const label = document.getElementById('sefaz-environment-label');
+
+                    if (!label) {
+                        return;
+                    }
+
+                    try {
+                        const response = await window.fiscalFetch('/api/configuracoes-emissor', {
+                            headers: {
+                                Accept: 'application/json',
+                                Authorization: 'Bearer ' + localStorage.getItem('nfe_token'),
+                            },
+                        });
+                        const data = await response.json();
+                        label.textContent = Number(data.ambiente) === 1
+                            ? 'Produção SEFAZ'
+                            : 'Homologação SEFAZ';
+                    } catch (error) {
+                        if (!error.authExpired) {
+                            label.textContent = 'Ambiente SEFAZ';
                         }
                     }
                 },
@@ -547,7 +574,7 @@
                     <!-- User actions & Mobile Navigation -->
                     <div class="flex items-center gap-4">
                         <span class="hidden md:inline-flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 text-xs font-medium text-emerald-400 rounded-full">
-                            <span class="h-1.5 w-1.5 bg-emerald-500 rounded-full"></span> Homologação SEFAZ
+                            <span class="h-1.5 w-1.5 bg-emerald-500 rounded-full"></span> <span id="sefaz-environment-label">Ambiente SEFAZ</span>
                         </span>
 
                         <div class="relative">

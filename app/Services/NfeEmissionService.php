@@ -21,7 +21,52 @@ use SoapFault;
 
 final class NfeEmissionService
 {
-    public function emit(array $payload, ?int $usuarioId = null): Nfe
+    /**
+     * Renderiza uma prévia de DANFE para um rascunho sem transmitir nada.
+     * O ambiente 2 é usado somente no XML temporário para que o DANFE
+     * identifique corretamente o documento como SEM VALOR FISCAL.
+     */
+    public function renderDraftDanfe(Nfe $nfe): string
+    {
+        if ($nfe->status !== 'rascunho') {
+            throw new NfeEmissionException(
+                'A prévia DANFE está disponível apenas para notas pendentes.',
+                422,
+                'erro',
+            );
+        }
+
+        $payload = $nfe->payload ?? [];
+        $natureza = NaturezaOperacao::query()->findOrFail($payload['id_natureza_operacao'] ?? $nfe->id_natureza_operacao);
+        $cliente = !empty($payload['id_cliente'])
+            ? Cliente::query()->find($payload['id_cliente'])
+            : null;
+        $destinatario = $cliente ? null : (!empty($payload['id_destinatario'])
+            ? Destinatario::query()->find($payload['id_destinatario'])
+            : null);
+
+        if (!$cliente && !$destinatario) {
+            throw new NfeEmissionException('O destinatário do rascunho não foi encontrado.', 422, 'erro');
+        }
+
+        $payload = $this->applyCatalogRules($payload, $natureza, $cliente, $destinatario);
+        $payload['numero'] = $nfe->numero;
+        $payload['serie'] = $nfe->serie;
+        $payload['informacoes_complementares'] = trim(
+            (string) ($payload['informacoes_complementares'] ?? '')
+            . "\nDOCUMENTO SEM VALOR FISCAL - PRÉVIA DE NF-e NÃO TRANSMITIDA À SEFAZ."
+        );
+
+        $xml = $this->buildXml($payload, $natureza, 2);
+        // O DANFE exige um Id de 44 dígitos para desenhar o código de barras.
+        // Esta chave é apenas técnica e local: a marca SEM VALOR FISCAL deixa
+        // explícito que ela não foi autorizada e não pode ser consultada na SEFAZ.
+        $xml = $this->addDraftIdentity($xml);
+
+        return (new Danfe($xml))->render();
+    }
+
+    public function emit(array $payload, ?int $usuarioId = null, ?Nfe $existing = null): Nfe
     {
         $nfe = null;
 
@@ -30,20 +75,36 @@ final class NfeEmissionService
             $cliente = !empty($payload['id_cliente']) ? Cliente::query()->findOrFail($payload['id_cliente']) : null;
             $destinatario = $cliente ? null : Destinatario::query()->findOrFail($payload['id_destinatario']);
             $payload = $this->applyCatalogRules($payload, $natureza, $cliente, $destinatario);
-            $nfe = Nfe::create([
+            $attributes = [
                 'numero' => $payload['numero'], 'serie' => $payload['serie'] ?? 1,
                 'status' => 'gerando', 'payload' => $payload, 'id_usuario' => $usuarioId,
                 'id_cliente' => $cliente?->id, 'id_destinatario' => $destinatario?->id, 'id_natureza_operacao' => $natureza->id,
                 'destinatario_documento' => preg_replace('/\D+/', '', (string) ($payload['destinatario']['cnpj'] ?? $payload['destinatario']['cpf'] ?? '')),
-            ]);
+            ];
+            $nfe = $existing ?: Nfe::create($attributes);
+            if ($existing) {
+                $nfe->update($attributes);
+            }
 
             $xml = $this->buildXml($payload, $natureza);
 
             if ($this->simulationEnabled()) {
+                try {
+                    $danfePath = 'nfe/'.$nfe->id.'-simulada-danfe.pdf';
+                    Storage::disk('local')->put($danfePath, (new Danfe($xml))->render());
+                    $nfe->danfe_path = $danfePath;
+                } catch (\Throwable $exception) {
+                    Log::warning('Não foi possível gerar o DANFE da simulação.', [
+                        'nfe_id' => $nfe->id,
+                        'exception' => $exception,
+                    ]);
+                }
+
                 $nfe->update([
                     'xml' => $xml,
                     'status' => 'simulada',
                     'xmotivo' => 'Simulação de homologação concluída. Nenhum documento foi transmitido à SEFAZ.',
+                    'danfe_path' => $nfe->danfe_path,
                 ]);
 
                 return $nfe->fresh();
@@ -52,10 +113,59 @@ final class NfeEmissionService
             $signedXml = $this->tools()->signNFe($xml);
             $nfe->update(['xml' => $signedXml, 'status' => 'assinado', 'chave_acesso' => $this->accessKey($signedXml)]);
 
-            // Envio assíncrono: o retorno 103 contém apenas o recibo do lote.
-            $response = $this->tools()->sefazEnviaLote([$signedXml], str_pad((string) $nfe->id, 15, '0', STR_PAD_LEFT));
+            // Cada emissão desta tela contém uma única NF-e. O envio deve ser
+            // síncrono (indSinc=1); assíncrono com lote de uma nota provoca o
+            // cStat 452: "Solicitada resposta assíncrona para Lote com somente
+            // 1 (uma) NF-e".
+            $response = $this->tools()->sefazEnviaLote(
+                [$signedXml],
+                str_pad((string) $nfe->id, 15, '0', STR_PAD_LEFT),
+                1,
+            );
             $std = (new Standardize())->toStd($response);
             $cstat = (int) ($std->cStat ?? 0);
+
+            // No modo síncrono, cStat 104 é o retorno do lote processado e o
+            // cStat definitivo (100 autorizado ou uma rejeição) fica em
+            // protNFe.infProt.
+            if ($cstat === 104 && isset($std->protNFe)) {
+                $protocol = $std->protNFe->infProt ?? null;
+                $protocolStatus = (int) ($protocol->cStat ?? 0);
+                $protocolReason = (string) ($protocol->xMotivo ?? $std->xMotivo ?? '');
+
+                // Uma rejeição síncrona também vem dentro de protNFe, mas não
+                // pode passar por toAuthorize(), pois não existe protocolo
+                // autorizador para anexar ao XML.
+                if ($protocolStatus !== 100) {
+                    $nfe->update([
+                        'status' => 'rejeitada',
+                        'cstat' => $protocolStatus,
+                        'xmotivo' => $this->sefazReason($protocolStatus, $protocolReason),
+                    ]);
+
+                    return $nfe->fresh();
+                }
+
+                $authorizedXml = Complements::toAuthorize($signedXml, $response);
+                $nfe->update([
+                    'status' => $protocolStatus === 100 ? 'autorizada' : 'rejeitada',
+                    'cstat' => $protocolStatus,
+                    'xmotivo' => $protocolStatus === 100
+                        ? $protocolReason
+                        : $this->sefazReason($protocolStatus, $protocolReason),
+                    'protocolo' => $protocol->nProt ?? null,
+                    'xml' => $authorizedXml,
+                ]);
+
+                if ($protocolStatus === 100) {
+                    $danfePath = 'nfe/'.$nfe->chave_acesso.'-danfe.pdf';
+                    Storage::disk('local')->put($danfePath, (new Danfe($authorizedXml))->render());
+                    $nfe->update(['danfe_path' => $danfePath]);
+                }
+
+                return $nfe->fresh();
+            }
+
             if ($cstat !== 103) {
                 throw new NfeEmissionException(
                     $this->sefazReason($cstat, $std->xMotivo ?? null),
@@ -168,6 +278,119 @@ final class NfeEmissionService
         }
     }
 
+    /**
+     * Transmits the cancellation event (110111) to SEFAZ.
+     *
+     * A previous version only changed the local status, which made the
+     * screen say "cancelada" while the invoice remained authorized at SEFAZ.
+     */
+    public function cancel(Nfe $nfe, string $justificativa): Nfe
+    {
+        $justificativa = trim($justificativa);
+
+        if (mb_strlen($justificativa) < 15 || mb_strlen($justificativa) > 255) {
+            throw new NfeEmissionException(
+                'A justificativa do cancelamento deve conter entre 15 e 255 caracteres.',
+                422,
+                'autorizada',
+                $nfe->cstat,
+            );
+        }
+
+        if (in_array((int) $nfe->cstat, [135, 136, 155], true)) {
+            throw new NfeEmissionException(
+                'Esta NF-e já possui cancelamento autorizado pela SEFAZ.',
+                422,
+                'cancelada',
+                (int) $nfe->cstat,
+            );
+        }
+
+        if (!in_array((string) $nfe->status, ['autorizada', 'cancelada'], true)) {
+            throw new NfeEmissionException(
+                'Somente uma NF-e autorizada pode ser cancelada na SEFAZ.',
+                422,
+                (string) $nfe->status,
+                $nfe->cstat,
+            );
+        }
+
+        if (!$nfe->chave_acesso || !$nfe->protocolo) {
+            throw new NfeEmissionException(
+                'A NF-e não possui chave de acesso e protocolo de autorização para cancelamento.',
+                422,
+                (string) $nfe->status,
+                $nfe->cstat,
+            );
+        }
+
+        if (!$nfe->xml) {
+            throw new NfeEmissionException(
+                'O XML autorizado da NF-e não está disponível para auditoria.',
+                422,
+                (string) $nfe->status,
+                $nfe->cstat,
+            );
+        }
+
+        try {
+            $response = $this->tools()->sefazCancela(
+                (string) $nfe->chave_acesso,
+                $justificativa,
+                (string) $nfe->protocolo,
+                now('America/Sao_Paulo'),
+                str_pad((string) $nfe->id, 15, '0', STR_PAD_LEFT),
+            );
+
+            $std = (new Standardize())->toStd($response);
+            $infEvento = $std->retEvento->infEvento ?? $std->infEvento ?? null;
+            $cstat = (int) ($infEvento->cStat ?? $std->cStat ?? 0);
+            $motivo = trim((string) ($infEvento->xMotivo ?? $std->xMotivo ?? ''));
+
+            if (!in_array($cstat, [135, 136, 155], true)) {
+                $reason = $this->sefazReason($cstat, $motivo);
+                // A nota pode ter sido marcada como cancelada somente pela
+                // tela antiga. Se a SEFAZ recusou o evento, ela continua
+                // autorizada e pode ser corrigida/reprocessada.
+                $nfe->update([
+                    'status' => 'autorizada',
+                    'cstat' => $cstat ?: $nfe->cstat,
+                    'xmotivo' => $reason,
+                    'data_cancelamento' => null,
+                    'motivo_cancelamento' => null,
+                ]);
+
+                throw new NfeEmissionException($reason, 422, 'autorizada', $cstat ?: $nfe->cstat);
+            }
+
+            $nfe->update([
+                'status' => 'cancelada',
+                'cstat' => $cstat,
+                'xmotivo' => $motivo ?: 'Cancelamento homologado pela SEFAZ.',
+                'data_cancelamento' => now('America/Sao_Paulo'),
+                'motivo_cancelamento' => $justificativa,
+            ]);
+
+            return $nfe->fresh();
+        } catch (NfeEmissionException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('Falha na transmissão do cancelamento da NF-e.', [
+                'nfe_id' => $nfe->id,
+                'chave_acesso' => $nfe->chave_acesso,
+                'exception' => $e,
+            ]);
+
+            throw new NfeEmissionException(
+                $this->friendlyIntegrationMessage($e),
+                503,
+                (string) $nfe->status,
+                $nfe->cstat,
+                $e,
+            );
+        }
+    }
+
     private function tools(): Tools
     {
         $user = auth()->user();
@@ -219,43 +442,115 @@ final class NfeEmissionService
         return new Tools(json_encode($config, JSON_THROW_ON_ERROR), $certificateObject);
     }
 
-    private function buildXml(array $p, NaturezaOperacao $natureza): string
+    private function buildXml(array $p, NaturezaOperacao $natureza, ?int $ambienteOverride = null): string
     {
         $make = new Make();
         $version = config('nfe.versao');
         $emissor = $this->currentEmissor();
-        $ambiente = $emissor?->ambiente ?? config('nfe.ambiente');
+        $ambiente = $ambienteOverride ?? ($emissor?->ambiente ?? config('nfe.ambiente'));
+        if ((int) $ambiente === 1 && trim((string) ($emissor?->inscricao_estadual ?? '')) === '') {
+            throw new NfeEmissionException(
+                'Informe a Inscrição Estadual do emitente antes de emitir em produção.',
+                422,
+                'erro',
+            );
+        }
         $codigoMunicipio = $emissor?->codigo_municipio_ibge ?: $p['destinatario']['endereco']['cMun'];
-        $emissao = trim(($p['data_emissao'] ?? now()->format('Y-m-d')).' '.($p['hora_emissao'] ?? now()->format('H:i')));
-        $now = \Carbon\Carbon::parse($emissao)->toIso8601String();
-        $saida = !empty($p['data_saida'])
-            ? \Carbon\Carbon::parse(trim($p['data_saida'].' '.($p['hora_saida'] ?? '00:00')))->toIso8601String()
-            : null;
+
+        // A data/hora informada na emissão é a hora local do estabelecimento.
+        // Sem o timezone explícito, o Carbon usa UTC no container e transforma
+        // 21:08 de São Paulo em 21:08 UTC (três horas adiantado no XML).
+        $timezone = 'America/Sao_Paulo';
+        $agoraLocal = \Carbon\Carbon::now($timezone);
+        $emissao = trim(
+            ($p['data_emissao'] ?? $agoraLocal->format('Y-m-d')).' '.
+            ($p['hora_emissao'] ?? $agoraLocal->format('H:i')),
+        );
+        $now = \Carbon\Carbon::parse($emissao, $timezone)->toIso8601String();
+
+        $saida = null;
+        if (!empty($p['data_saida'])) {
+            $saidaTexto = trim(
+                $p['data_saida'].' '.($p['hora_saida'] ?? $agoraLocal->format('H:i')),
+            );
+            $saida = \Carbon\Carbon::parse($saidaTexto, $timezone)->toIso8601String();
+        }
         $tipoNota = ($natureza->tipo_movimento ?? 'Saída') === 'Entrada' ? 0 : 1;
         $finalidade = (int) ($p['finalidade'] ?? 1);
         $indFinal = !empty($p['consumidor_final']) ? 1 : 0;
         $indPres = (int) ($p['ind_pres'] ?? 9);
         $this->tag($make, 'taginfNFe', ['versao' => $version, 'Id' => null, 'pk_nItem' => '']);
         $this->tag($make, 'tagide', ['cUF' => config('nfe.cuf'), 'cNF' => random_int(10000000, 99999999), 'natOp' => $p['natureza_operacao'], 'mod' => 55, 'serie' => $p['serie'] ?? ($emissor?->serie_padrao ?? 1), 'nNF' => $p['numero'], 'dhEmi' => $now, 'dhSaiEnt' => $saida, 'tpNF' => $tipoNota, 'idDest' => 1, 'cMunFG' => $codigoMunicipio, 'tpImp' => 1, 'tpEmis' => 1, 'tpAmb' => $ambiente, 'finNFe' => $finalidade, 'indFinal' => $indFinal, 'indPres' => $indPres, 'procEmi' => 0, 'verProc' => '1.0']);
-        $this->tag($make, 'tagemit', ['xNome' => $emissor?->razao_social ?? config('nfe.razao_social'), 'CNPJ' => $emissor?->cnpj ?? config('nfe.cnpj'), 'IE' => $emissor?->inscricao_estadual ?? config('nfe.ie'), 'CRT' => $emissor?->crt ?? config('nfe.crt')]);
+        // CRT=4 é o código oficial do MEI na NF-e. Não converter para CRT=1:
+        // a SEFAZ compara este valor com o regime cadastrado do emitente.
+        $crt = (int) ($emissor?->crt ?? config('nfe.crt'));
+        $emitente = [
+            'xNome' => $emissor?->razao_social ?? config('nfe.razao_social'),
+            'CNPJ' => $emissor?->cnpj ?? config('nfe.cnpj'),
+            'CRT' => $crt,
+        ];
+        $inscricaoEstadual = trim((string) ($emissor?->inscricao_estadual ?? config('nfe.ie', '')));
+        if ($inscricaoEstadual !== '') {
+            $emitente['IE'] = $inscricaoEstadual;
+        }
+        $this->tag($make, 'tagemit', $emitente);
         $this->tag($make, 'tagenderEmit', $this->emitterAddress($p));
-        $d = $p['destinatario']; $this->tag($make, 'tagdest', ['xNome' => $d['nome'], 'CNPJ' => $d['cnpj'] ?? null, 'CPF' => $d['cpf'] ?? null, 'IE' => $d['ie'] ?? null, 'indIEDest' => $d['ie'] ? 1 : 9]);
-        $this->tag($make, 'tagenderDest', $d['endereco'] + ['CEP' => $d['endereco']['cep'], 'UF' => $d['endereco']['uf']]);
-        $total = 0.0;
+        $d = $p['destinatario'];
+        $this->tag($make, 'tagdest', ['xNome' => $d['nome'], 'CNPJ' => $d['cnpj'] ?? null, 'CPF' => $d['cpf'] ?? null, 'IE' => $d['ie'] ?? null, 'indIEDest' => $d['ie'] ? 1 : 9]);
+        $enderecoDest = $d['endereco'];
+        $enderecoDest['CEP'] = $enderecoDest['CEP'] ?? $enderecoDest['cep'] ?? null;
+        $enderecoDest['UF'] = $enderecoDest['UF'] ?? $enderecoDest['uf'] ?? null;
+        $enderecoDest['cPais'] = $enderecoDest['cPais'] ?? '1058';
+        $enderecoDest['xPais'] = $enderecoDest['xPais'] ?? 'BRASIL';
+        unset($enderecoDest['cep'], $enderecoDest['uf']);
+        $this->tag($make, 'tagenderDest', $enderecoDest);
+        $valoresProdutos = array_map(
+            static fn (array $item): float => round((float) $item['quantidade'] * (float) $item['valor_unitario'], 2),
+            $p['produtos'],
+        );
+        $total = round(array_sum($valoresProdutos), 2);
+        $desconto = round((float) ($p['desconto'] ?? 0), 2);
+        $outrasDespesas = round((float) ($p['outras_despesas'] ?? 0), 2);
+        if ($desconto > $total) {
+            throw new NfeEmissionException(
+                'O desconto não pode ser maior que o total dos produtos.',
+                422,
+                'erro',
+            );
+        }
+        $descontoDistribuido = 0.0;
         foreach ($p['produtos'] as $i => $item) {
-            $n = $i + 1; $value = round((float)$item['quantidade'] * (float)$item['valor_unitario'], 2); $total += $value;
-            $this->tag($make, 'tagprod', ['item' => $n, 'cProd' => $item['codigo'], 'cEAN' => 'SEM GTIN', 'cEANTrib' => 'SEM GTIN', 'xProd' => $item['descricao'], 'NCM' => $item['ncm'], 'CFOP' => $item['cfop'], 'uCom' => $item['unidade'], 'qCom' => $item['quantidade'], 'vUnCom' => $item['valor_unitario'], 'vProd' => $value, 'uTrib' => $item['unidade'], 'qTrib' => $item['quantidade'], 'vUnTrib' => $item['valor_unitario'], 'indTot' => 1]);
+            $n = $i + 1;
+            $value = $valoresProdutos[$i];
+            $itemDesconto = $i === array_key_last($p['produtos'])
+                ? round($desconto - $descontoDistribuido, 2)
+                : round($total > 0 ? $desconto * ($value / $total) : 0, 2);
+            $descontoDistribuido = round($descontoDistribuido + $itemDesconto, 2);
+            $this->tag($make, 'tagprod', ['item' => $n, 'cProd' => $item['codigo'], 'cEAN' => 'SEM GTIN', 'cEANTrib' => 'SEM GTIN', 'xProd' => $item['descricao'], 'NCM' => $item['ncm'], 'CFOP' => $item['cfop'], 'uCom' => $item['unidade'], 'qCom' => $item['quantidade'], 'vUnCom' => $item['valor_unitario'], 'vProd' => $value, 'vDesc' => $itemDesconto > 0 ? $itemDesconto : null, 'uTrib' => $item['unidade'], 'qTrib' => $item['quantidade'], 'vUnTrib' => $item['valor_unitario'], 'indTot' => 1]);
             $this->tag($make, 'tagimposto', ['item' => $n, 'vTotTrib' => 0]);
             $this->appendTaxes($make, $item, $natureza, $n);
         }
-        $desconto = round((float) ($p['desconto'] ?? 0), 2);
-        $outrasDespesas = round((float) ($p['outras_despesas'] ?? 0), 2);
         $valorNota = max(0, round($total - $desconto + $outrasDespesas, 2));
         $this->tag($make, 'tagICMSTot', ['vBC'=>0,'vICMS'=>0,'vICMSDeson'=>0,'vBCST'=>0,'vST'=>0,'vProd'=>$total,'vFrete'=>0,'vSeg'=>0,'vDesc'=>$desconto,'vII'=>0,'vIPI'=>0,'vPIS'=>0,'vCOFINS'=>0,'vOutro'=>$outrasDespesas,'vNF'=>$valorNota,'vTotTrib'=>0]);
         $this->appendTransport($make, $p['transportadora'] ?? [], $p['volumes'] ?? []);
-        $this->tag($make, 'tagpag', ['vTroco' => 0]); $this->tag($make, 'tagdetPag', ['indPag'=>0, 'tPag'=>$p['pagamento']['tpag'] ?? '90', 'vPag'=>$valorNota]);
-        $this->tag($make, 'taginfAdic', ['infCpl' => $p['informacoes_complementares'] ?? $natureza->informacoes_complementares]);
-        return $make->getXML();
+        $tipoPagamento = (string) ($p['pagamento']['tpag'] ?? '90');
+        // O schema NF-e 4.00 exige vPag no detPag. Para tPag=90
+        // (sem pagamento), o valor correto é zero.
+        $detalhePagamento = ['indPag' => 0, 'tPag' => $tipoPagamento];
+        if ($tipoPagamento !== '90') {
+            $detalhePagamento['vPag'] = $valorNota;
+        } else {
+            $detalhePagamento['vPag'] = 0;
+        }
+        $this->tag($make, 'tagpag', []);
+        $this->tag($make, 'tagdetPag', $detalhePagamento);
+        $informacoesComplementares = trim((string) ($p['informacoes_complementares'] ?? $natureza->informacoes_complementares ?? ''));
+        if ($informacoesComplementares !== '') {
+            $this->tag($make, 'taginfAdic', ['infCpl' => $informacoesComplementares]);
+        }
+
+        $xml = $make->getXML();
+        return $xml;
     }
 
     private function appendTransport(Make $make, array $transportadora, array $volumes): void
@@ -326,16 +621,57 @@ final class NfeEmissionService
             'endereco' => ['xLgr' => $source['logradouro'], 'nro' => $source['numero'], 'xBairro' => $source['bairro'], 'cMun' => $source['cMun'], 'xMun' => $source['municipio'], 'uf' => $source['uf'], 'cep' => $source['cep']],
         ];
         foreach ($payload['produtos'] as &$item) {
-            $item['cfop'] = $natureza->cfop_padrao;
-            $item['csosn'] = $natureza->csosn_padrao ?: ($item['csosn'] ?? null);
+            // A natureza fornece apenas o valor inicial. Se o usuário informar
+            // outro CFOP no item, ele deve ser preservado até o XML final.
+            $item['cfop'] = $item['cfop'] ?: $natureza->cfop_padrao;
+            $item['csosn'] = $item['csosn'] ?: ($natureza->csosn_padrao ?: null);
         }
         unset($item);
         return $payload;
     }
 
-    private function tag(Make $make, string $method, array $data): void { $make->{$method}((object) array_filter($data, static fn ($v) => $v !== null)); }
+    private function tag(Make $make, string $method, array $data): void
+    {
+        $data = array_filter($data, static fn ($value) => $value !== null && (!is_string($value) || trim($value) !== ''));
+        $make->{$method}((object) $data);
+    }
     private function emitterAddress(array $p): array { $e=$this->currentEmissor(); return ['xLgr'=>$e?->logradouro ?: 'ENDERECO DO EMITENTE','nro'=>$e?->numero ?: 'S/N','xBairro'=>$e?->bairro ?: 'CENTRO','cMun'=>$e?->codigo_municipio_ibge ?: $p['destinatario']['endereco']['cMun'],'xMun'=>$e?->municipio ?: $p['destinatario']['endereco']['xMun'],'UF'=>$e?->uf ?: config('nfe.uf'),'CEP'=>$e?->cep ?: $p['destinatario']['endereco']['cep'],'cPais'=>'1058','xPais'=>'BRASIL']; }
     private function accessKey(string $xml): ?string { $dom = new \DOMDocument(); $dom->loadXML($xml); $node = $dom->getElementsByTagName('infNFe')->item(0); return $node?->getAttribute('Id') ? substr($node->getAttribute('Id'), 3) : null; }
+
+    private function addDraftIdentity(string $xml): string
+    {
+        $dom = new \DOMDocument();
+        $dom->loadXML($xml);
+        $inf = $dom->getElementsByTagName('infNFe')->item(0);
+        $ide = $dom->getElementsByTagName('ide')->item(0);
+        $emit = $dom->getElementsByTagName('emit')->item(0);
+
+        if (!$inf || !$ide || !$emit) {
+            return $xml;
+        }
+
+        $dhEmi = (string) $dom->getElementsByTagName('dhEmi')->item(0)?->nodeValue;
+        $cnpj = preg_replace('/\D+/', '', (string) $dom->getElementsByTagName('CNPJ')->item(0)?->nodeValue);
+        $cuf = str_pad((string) ($ide->getElementsByTagName('cUF')->item(0)?->nodeValue ?? '35'), 2, '0', STR_PAD_LEFT);
+        $aamm = substr(preg_replace('/\D+/', '', $dhEmi), 2, 4) ?: now('America/Sao_Paulo')->format('ym');
+        $serie = str_pad((string) ($ide->getElementsByTagName('serie')->item(0)?->nodeValue ?? '1'), 3, '0', STR_PAD_LEFT);
+        $numero = str_pad((string) ($ide->getElementsByTagName('nNF')->item(0)?->nodeValue ?? '0'), 9, '0', STR_PAD_LEFT);
+        $tpEmis = (string) ($ide->getElementsByTagName('tpEmis')->item(0)?->nodeValue ?? '1');
+        $cNf = str_pad((string) ($ide->getElementsByTagName('cNF')->item(0)?->nodeValue ?? random_int(1, 99999999)), 8, '0', STR_PAD_LEFT);
+        $base = $cuf . $aamm . str_pad($cnpj, 14, '0', STR_PAD_LEFT) . '55' . $serie . $numero . $tpEmis . $cNf;
+
+        $sum = 0;
+        $weight = 2;
+        for ($i = strlen($base) - 1; $i >= 0; $i--) {
+            $sum += ((int) $base[$i]) * $weight;
+            $weight = $weight === 9 ? 2 : $weight + 1;
+        }
+        $remainder = $sum % 11;
+        $digit = $remainder === 0 || $remainder === 1 ? 0 : 11 - $remainder;
+        $inf->setAttribute('Id', 'NFe' . $base . $digit);
+
+        return $dom->saveXML();
+    }
 
     private function sefazReason(int $cstat, ?string $reason): string
     {

@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     image: fiscalflow-app:latest
     restart: unless-stopped
+    ports:
+      - "8000:8000"
     expose:
       - "8000"
     env_file:
@@ -16,6 +18,10 @@ services:
       DB_CONNECTION: pgsql
       DB_HOST: db
       DB_PORT: "5432"
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      CACHE_STORE: file
     volumes:
       - laravel_storage:/var/www/html/storage
       - ${NFE_CERTIFICATE_DIR:-./secrets/certificates}:/run/secrets/nfe:ro
@@ -34,6 +40,8 @@ services:
       POSTGRES_DB: ${DB_DATABASE}
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_EXTERNAL_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

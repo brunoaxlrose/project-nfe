@@ -63,11 +63,11 @@
                         </label>
                         <label>
                             <span class="label">Inscrição estadual</span>
-                            <input x-model="form.inscricao_estadual" :disabled="form.inscricao_estadual_isento" placeholder="Informe a IE ou marque isento" :class="fieldClass('inscricao_estadual')" inputmode="numeric">
+                            <input name="inscricao_estadual" x-model="form.inscricao_estadual" :disabled="form.inscricao_estadual_isento" placeholder="Informe a IE ou marque isento" :class="fieldClass('inscricao_estadual')" inputmode="numeric">
                             <p x-show="fieldError('inscricao_estadual')" class="field-error" x-text="fieldError('inscricao_estadual')"></p>
                         </label>
                         <label class="flex items-end gap-2 pb-3">
-                            <input x-model="form.inscricao_estadual_isento" type="checkbox" class="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500">
+                            <input name="inscricao_estadual_isento" x-model="form.inscricao_estadual_isento" type="checkbox" class="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500">
                             <span class="text-sm text-slate-700">Inscrição estadual isenta</span>
                         </label>
                         <label>
@@ -80,7 +80,7 @@
                         </label>
                         <label>
                             <span class="label">Regime tributário <b class="text-red-600">*</b></span>
-                            <select x-model="form.crt" :class="fieldClass('crt')" required>
+                            <select name="crt" x-model.number="form.crt" :class="fieldClass('crt')" required>
                                 <option value="1">Simples Nacional</option>
                                 <option value="2">Simples Nacional - excesso de sublimite</option>
                                 <option value="3">Regime normal</option>
@@ -181,7 +181,7 @@
                     <div class="grid gap-5 md:grid-cols-2">
                         <label>
                             <span class="label">Ambiente da NF-e <b class="text-red-600">*</b></span>
-                            <select x-model="form.ambiente" :class="fieldClass('ambiente')" required>
+                            <select name="ambiente" x-model.number="form.ambiente" :class="fieldClass('ambiente')" required>
                                 <option value="2">2 - Homologação (ambiente de testes)</option>
                                 <option value="1">1 - Produção (com valor fiscal)</option>
                             </select>
@@ -193,6 +193,11 @@
                         <label>
                             <span class="label">Série padrão <b class="text-red-600">*</b></span>
                             <input x-model.number="form.serie_padrao" type="number" min="1" max="999" placeholder="Ex.: 1" :class="fieldClass('serie_padrao')" required>
+                        </label>
+                        <label>
+                            <span class="label">Próximo número da NF-e</span>
+                            <input name="proximo_numero" x-model.number="form.proximo_numero" type="number" min="1" max="999999999" placeholder="Ex.: 424" :class="fieldClass('proximo_numero')">
+                            <small class="mt-1 block text-xs text-slate-500">Use para continuar a sequência de outro sistema. Depois de autorizar, o próximo número avança automaticamente.</small>
                         </label>
                         <label>
                             <span class="label">CFOP padrão <b class="text-red-600">*</b></span>
@@ -277,7 +282,7 @@
                 <div class="flex flex-col justify-between gap-3 border-t border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:px-8">
                     <p class="text-xs text-slate-500" x-show="lastSavedAt" x-text="'Última atualização: ' + lastSavedAt"></p>
                     <div class="flex flex-col gap-2 sm:ml-auto sm:flex-row">
-                        <button type="submit" :disabled="saving" class="inline-flex items-center justify-center gap-2 bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+                        <button type="submit" @click.prevent="salvar()" :disabled="saving" class="inline-flex items-center justify-center gap-2 bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
                             <span x-show="saving" class="h-4 w-4 animate-spin border-2 border-white/40 border-t-white"></span>
                             <span x-text="saving ? 'Salvando configurações...' : 'Salvar configurações'"></span>
                         </button>
@@ -336,6 +341,7 @@
                     email: '',
                     ambiente: '2',
                     serie_padrao: 1,
+                    proximo_numero: '',
                     cfop_padrao: '5901',
                     csosn_padrao: '0400',
                     certificado_configurado: false,
@@ -508,8 +514,33 @@
                             'razao_social', 'nome_fantasia', 'cnpj', 'inscricao_estadual', 'inscricao_estadual_isento',
                             'inscricao_municipal', 'cnae', 'crt', 'tamanho_empresa', 'cep', 'uf', 'municipio', 'bairro',
                             'logradouro', 'numero', 'complemento', 'codigo_municipio_ibge', 'telefone', 'celular', 'email',
-                            'ambiente', 'serie_padrao', 'cfop_padrao', 'csosn_padrao',
+                            'ambiente', 'serie_padrao', 'proximo_numero', 'cfop_padrao', 'csosn_padrao',
                         ];
+
+                        // Leia o ambiente diretamente do select. Isso evita que um estado
+                        // Alpine antigo (normalmente o padrão 2) sobrescreva a escolha 1.
+                        const ambienteSelect = this.$root.querySelector('select[name="ambiente"]');
+                        if (ambienteSelect) {
+                            this.form.ambiente = Number(ambienteSelect.value);
+                        }
+
+                        const crtSelect = this.$root.querySelector('select[name="crt"]');
+                        if (crtSelect) {
+                            this.form.crt = Number(crtSelect.value);
+                        }
+
+                        const inscricaoEstadualInput = this.$root.querySelector('input[name="inscricao_estadual"]');
+                        const inscricaoEstadualIsento = this.$root.querySelector('input[name="inscricao_estadual_isento"]');
+                        const proximoNumeroInput = this.$root.querySelector('input[name="proximo_numero"]');
+                        if (inscricaoEstadualInput && !inscricaoEstadualInput.disabled) {
+                            this.form.inscricao_estadual = inscricaoEstadualInput.value.trim();
+                        }
+                        if (inscricaoEstadualIsento) {
+                            this.form.inscricao_estadual_isento = inscricaoEstadualIsento.checked;
+                        }
+                        if (proximoNumeroInput) {
+                            this.form.proximo_numero = proximoNumeroInput.value.trim();
+                        }
 
                         fields.forEach((field) => {
                             let value = this.form[field];
@@ -525,8 +556,29 @@
                             body.append(field, value ?? '');
                         });
 
-                        if (this.certificate) {
-                            body.append('certificado', this.certificate);
+                        // Os selects são a fonte definitiva do valor escolhido.
+                        // Isso evita que uma resposta antiga de carregamento sobrescreva
+                        // o CRT/ambiente no estado Alpine antes do envio.
+                        const crtValue = this.$root.querySelector('select[name="crt"]')?.value;
+                        const ambienteValue = this.$root.querySelector('select[name="ambiente"]')?.value;
+                        const porteValue = this.$root.querySelector('select[x-model="form.tamanho_empresa"]')?.value;
+                        if (crtValue !== undefined) {
+                            body.set('crt', crtValue);
+                        }
+                        if (ambienteValue !== undefined) {
+                            body.set('ambiente', ambienteValue);
+                        }
+                        if (porteValue !== undefined) {
+                            body.set('tamanho_empresa', porteValue);
+                        }
+                        if (proximoNumeroInput) {
+                            body.set('proximo_numero', proximoNumeroInput.value.trim());
+                        }
+
+                        const certificate = this.$refs.certificate?.files?.[0] || this.certificate;
+
+                        if (certificate) {
+                            body.append('certificado', certificate, certificate.name);
                             body.append('certificado_senha', this.form.certificado_senha || '');
                         }
 

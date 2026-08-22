@@ -6,6 +6,11 @@
                     <span aria-hidden="true">⎙</span>
                     Imprimir
                 </button>
+                <button type="button" @click="atualizarAgora" :disabled="loading" class="inline-flex items-center gap-2 border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+                    <span x-show="loading" x-cloak class="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600"></span>
+                    <span x-show="!loading" aria-hidden="true">↻</span>
+                    Atualizar
+                </button>
                 <button type="button" @click="exportar" class="inline-flex items-center gap-2 border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                     <span aria-hidden="true">↓</span>
                     Exportar CSV
@@ -43,6 +48,7 @@
                         <span class="label">Situação</span>
                         <select x-model="filters.status" @change="load()" class="field">
                             <option value="">Todas as situações</option>
+                            <option value="rascunho">Pendente</option>
                             <option value="autorizada">Emitida DANFE</option>
                             <option value="simulada">Simulada</option>
                             <option value="aguardando_retorno">Processando</option>
@@ -68,6 +74,7 @@
                     <div class="flex flex-wrap items-center gap-3">
                         <span class="inline-flex items-center gap-2"><span class="h-2 w-2 bg-blue-500"></span><span x-text="periodoDescricao"></span></span>
                         <span x-show="loading" x-cloak class="inline-flex items-center gap-2 text-blue-600"><span class="h-3 w-3 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"></span> Atualizando...</span>
+                        <span x-show="lastUpdatedAt && !loading" x-cloak x-text="'Atualizado às ' + lastUpdatedAt"></span>
                     </div>
                     <button type="button" @click="limparFiltros" class="font-semibold text-blue-600 hover:text-blue-800">Limpar filtros</button>
                 </div>
@@ -103,15 +110,16 @@
                                 <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600" x-text="formatDate(nota.created_at)"></td>
                                 <td class="min-w-[280px] px-5 py-4"><p class="text-sm font-medium text-slate-800" x-text="nota.destinatario_nome || 'Não informado'"></p><p x-show="nota.natureza_operacao" class="mt-1 text-xs text-slate-500" x-text="nota.natureza_operacao?.descricao || nota.natureza_operacao?.nome || ''"></p></td>
                                 <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600" x-text="formatDocument(nota.destinatario_documento)"></td>
-                                <td class="whitespace-nowrap px-5 py-4"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold ring-1 ring-inset" :class="badgeClass(nota.status)"><span class="h-1.5 w-1.5 rounded-full bg-current"></span><span x-text="statusLabel(nota.status)"></span></span><p x-show="['rejeitada', 'erro'].includes(nota.status) && nota.xmotivo" class="mt-1 max-w-[260px] truncate text-xs text-red-600" :title="nota.xmotivo" x-text="nota.xmotivo"></p></td>
+                                <td class="whitespace-nowrap px-5 py-4"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold ring-1 ring-inset" :class="badgeClass(nota.status)"><span class="h-1.5 w-1.5 rounded-full bg-current"></span><span x-text="statusLabel(nota.status)"></span></span><p x-show="['rejeitada', 'erro'].includes(nota.status) && nota.xmotivo" class="mt-1 max-w-[260px] truncate text-xs text-red-600" :title="nota.xmotivo" x-text="nota.xmotivo"></p><p x-show="nota.status === 'cancelada'" class="mt-1 max-w-[260px] truncate text-xs text-amber-700" :title="nota.xmotivo" x-text="'SEFAZ cStat ' + (nota.cstat || '—') + (nota.protocolo ? ' · Protocolo ' + nota.protocolo : '')"></p></td>
                                 <td class="whitespace-nowrap px-5 py-4 text-right text-sm font-semibold tabular-nums text-slate-800" x-text="money(nota.valor_total)"></td>
                                 <td class="relative px-5 py-4 text-right">
                                     <button type="button" @click="activeMenu = activeMenu === nota.id ? null : nota.id" class="inline-flex h-8 w-8 items-center justify-center text-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900" :aria-expanded="activeMenu === nota.id" aria-label="Abrir ações da nota">⋮</button>
                                     <div x-show="activeMenu === nota.id" x-cloak @click.outside="activeMenu = null" class="absolute right-5 top-12 z-30 w-60 border border-slate-200 bg-white py-1 text-left shadow-xl">
-                                        <button x-show="can('nfe.baixar')" x-cloak type="button" @click="download(nota, 'pdf')" class="action-item"><span>▣</span> Gerar PDF DANFE / imprimir</button>
+                                        <button x-show="can('nfe.baixar')" x-cloak type="button" @click="download(nota, 'pdf')" class="action-item"><span>▣</span><span x-text="nota.status === 'rascunho' ? 'Visualizar prévia DANFE' : 'Gerar PDF DANFE / imprimir'"></span></button>
                                         <button x-show="can('nfe.baixar')" x-cloak type="button" @click="download(nota, 'xml')" class="action-item"><span>&lt;/&gt;</span> Exportar XML</button>
-                                        <button x-show="can('nfe.cancelar') && ['autorizada', 'emitida', 'Emitida DANFE'].includes(nota.status)" x-cloak type="button" @click="abrirModal('cancelar', nota)" class="action-item"><span>×</span> Cancelar NF-e</button>
-                                        <button x-show="nota.status === 'rascunho'" x-cloak type="button" @click="excluirRascunho(nota)" class="action-item text-red-600 hover:text-red-800"><span>🗑</span> Excluir Rascunho</button>
+                                        <button x-show="can('nfe.cancelar') && ['autorizada', 'emitida', 'Emitida DANFE'].includes(nota.status)" x-cloak type="button" @click="abrirModal('cancelar', nota)" class="action-item"><span>×</span> Cancelar NF-e na SEFAZ</button>
+                                        <button x-show="nota.status === 'rascunho'" x-cloak type="button" @click="enviarPendente(nota)" class="action-item text-blue-600 hover:text-blue-800"><span>➤</span> Enviar para a SEFAZ</button>
+                                        <button x-show="nota.status === 'rascunho'" x-cloak type="button" @click="excluirRascunho(nota)" class="action-item text-red-600 hover:text-red-800"><span>🗑</span> Excluir pendente</button>
                                         <button x-show="can('nfe.cce')" x-cloak type="button" @click="abrirModal('cce', nota)" :disabled="nota.status !== 'autorizada'" class="action-item disabled:cursor-not-allowed disabled:opacity-40"><span>✎</span> Carta de correção (CC-e)</button>
                                         <button x-show="can('nfe.clonar')" x-cloak type="button" @click="clonar(nota)" class="action-item"><span>⧉</span> Clonar nota</button>
                                     </div>
@@ -142,7 +150,27 @@
                 </div>
                 <p class="mt-4 text-sm text-slate-600" x-text="modal.type === 'cce' ? 'Informe a correção permitida pela legislação. A CC-e não pode alterar valores, destinatário ou a data de emissão.' : 'A justificativa deve ter pelo menos 15 caracteres. A transmissão será registrada para auditoria.'"></p>
                 <label class="mt-5 block"><span class="label" x-text="modal.type === 'cce' ? 'Texto da correção' : 'Justificativa'"></span><textarea x-model="modal.text" rows="5" class="field" :placeholder="modal.type === 'cce' ? 'Descreva a correção fiscal' : 'Informe o motivo do cancelamento'"></textarea><small x-show="modal.error" x-text="modal.error" class="mt-1 block text-xs text-red-600"></small></label>
-                <div class="mt-6 flex justify-end gap-3"><button type="button" @click="fecharModal" class="border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Voltar</button><button type="button" @click="enviarModal" :disabled="modal.loading" class="inline-flex items-center gap-2 bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"><span x-show="modal.loading" x-cloak class="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-white"></span><span x-text="modal.type === 'cce' ? 'Enviar CC-e' : 'Solicitar cancelamento'"></span></button></div>
+                <div class="mt-6 flex justify-end gap-3"><button type="button" @click="fecharModal" class="border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Voltar</button><button type="button" @click="enviarModal" :disabled="modal.loading" class="inline-flex items-center gap-2 bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"><span x-show="modal.loading" x-cloak class="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-white"></span><span x-text="modal.type === 'cce' ? 'Enviar CC-e' : 'Transmitir cancelamento'"></span></button></div>
+            </div>
+        </div>
+
+        <div x-show="confirmacaoPendente.open" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4" @keydown.escape.window="fecharConfirmacaoPendente">
+            <div class="w-full max-w-md border border-slate-200 bg-white p-6 shadow-2xl" @click.outside="fecharConfirmacaoPendente">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-blue-600">Enviar NF-e</p>
+                        <h2 class="mt-1 text-xl font-bold text-slate-950">Confirmar transmissão</h2>
+                    </div>
+                    <button type="button" @click="fecharConfirmacaoPendente" :disabled="confirmacaoPendente.loading" class="text-xl text-slate-400 hover:text-slate-700 disabled:opacity-50" aria-label="Fechar">×</button>
+                </div>
+                <p class="mt-4 text-sm leading-6 text-slate-600">
+                    Esta nota está pendente e ainda não tem validade fiscal. Ao confirmar, ela será enviada para autorização na SEFAZ.
+                </p>
+                <p x-show="confirmacaoPendente.nota" class="mt-3 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700" x-text="confirmacaoPendente.nota ? formatNumber(confirmacaoPendente.nota.numero, confirmacaoPendente.nota.serie) : ''"></p>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" @click="fecharConfirmacaoPendente" :disabled="confirmacaoPendente.loading" class="border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Revisar depois</button>
+                    <button type="button" @click="confirmarEnvioPendente" :disabled="confirmacaoPendente.loading" class="inline-flex items-center gap-2 bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"><span x-show="confirmacaoPendente.loading" x-cloak class="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-white"></span><span x-text="confirmacaoPendente.loading ? 'Enviando...' : 'Enviar para a SEFAZ'"></span></button>
+                </div>
             </div>
         </div>
 
@@ -186,6 +214,8 @@
                 total: 0,
                 hasMore: false,
                 loading: false,
+                lastUpdatedAt: '',
+                refreshTimer: null,
                 pendingPage: null,
                 loadRequestId: 0,
                 error: '',
@@ -197,6 +227,7 @@
                 periodoDescricao: 'Últimos 30 dias',
                 filters: { busca: '', data_inicio: '', data_fim: '', status: '' },
                 modal: { open: false, type: '', nota: null, text: '', error: '', loading: false },
+                confirmacaoPendente: { open: false, nota: null, loading: false },
                 initialized: false,
 
                 get allSelected() {
@@ -211,10 +242,35 @@
                     this.initialized = true;
                     this.setPeriodo(this.periodo, false);
                     this.load();
+                    this.refreshTimer = window.setInterval(() => this.atualizarPendentes(), 30000);
                 },
 
                 destroy() {
                     document.body.classList.remove('overflow-hidden');
+                    if (this.refreshTimer) window.clearInterval(this.refreshTimer);
+                },
+
+                async atualizarAgora() {
+                    await this.atualizarPendentes(true);
+                },
+
+                async atualizarPendentes(force = false) {
+                    if (this.loading && !force) return;
+
+                    const pendentes = this.notas.filter((nota) => ['aguardando_retorno', 'gerando', 'assinado'].includes(nota.status) && nota.recibo);
+
+                    if (!pendentes.length) {
+                        await this.load(this.page, force);
+                        return;
+                    }
+
+                    this.loading = true;
+                    await Promise.allSettled(pendentes.map((nota) => fiscalFetch('/api/nfe/' + nota.id + '/consultar', {
+                        method: 'POST',
+                        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({}),
+                    })));
+                    await this.load(this.page, true);
                 },
 
                 abrirModalEmissao() {
@@ -313,7 +369,7 @@
                     this.loading = true;
                     this.error = '';
                     this.page = nextPage;
-                    const params = new URLSearchParams({ page: String(this.page), per_page: '20', ...this.filters });
+                    const params = new URLSearchParams({ page: String(this.page), per_page: '10', ...this.filters });
                     Object.entries(this.filters).forEach(([key, value]) => { if (!value) params.delete(key); });
 
                     try {
@@ -325,6 +381,7 @@
                             this.total = data.total || 0;
                             this.hasMore = Boolean(data.next_page_url);
                             this.selected = this.selected.filter((id) => this.notas.some((nota) => nota.id === id));
+                            this.lastUpdatedAt = new Intl.DateTimeFormat('pt-BR', { timeStyle: 'medium' }).format(new Date());
                         }
                     } catch (error) {
                         if (requestId === this.loadRequestId) {
@@ -353,7 +410,7 @@
                 },
 
                 statusLabel(status) {
-                    return ({ autorizada: 'Emitida DANFE', simulada: 'Simulada', rejeitada: 'Rejeitada', aguardando_retorno: 'Processando', cancelada: 'Cancelada', erro: 'Erro', gerando: 'Gerando', assinado: 'Assinada' }[status] || status || 'Pendente');
+                    return ({ rascunho: 'Pendente', autorizada: 'Emitida DANFE', simulada: 'Simulada', rejeitada: 'Rejeitada', aguardando_retorno: 'Processando', cancelada: 'Cancelada', erro: 'Erro', gerando: 'Gerando', assinado: 'Assinada' }[status] || status || 'Pendente');
                 },
 
                 badgeClass(status) {
@@ -392,6 +449,11 @@
                         }
                         const blob = await response.blob();
                         const url = URL.createObjectURL(blob);
+                        if (nota.status === 'rascunho' && type === 'pdf') {
+                            window.open(url, '_blank', 'noopener');
+                            setTimeout(() => URL.revokeObjectURL(url), 60000);
+                            return;
+                        }
                         const link = document.createElement('a');
                         link.href = url;
                         link.download = (type === 'pdf' ? 'danfe-' : 'nfe-') + nota.id + '.' + type;
@@ -479,6 +541,39 @@
                         this.abrirModalEmissao();
                     } catch (error) {
                         window.fiscalToast?.('error', error.message, 'Clonagem indisponível');
+                    }
+                },
+
+                async enviarPendente(nota) {
+                    this.activeMenu = null;
+                    this.confirmacaoPendente = { open: true, nota, loading: false };
+                },
+
+                fecharConfirmacaoPendente() {
+                    if (this.confirmacaoPendente.loading) return;
+                    this.confirmacaoPendente = { open: false, nota: null, loading: false };
+                },
+
+                async confirmarEnvioPendente() {
+                    const nota = this.confirmacaoPendente.nota;
+                    if (!nota || this.confirmacaoPendente.loading) return;
+                    this.confirmacaoPendente.loading = true;
+                    try {
+                        const response = await fiscalFetch('/api/nfe/' + nota.id + '/emitir', {
+                            method: 'POST',
+                            headers: { ...this.headers(), 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                            body: JSON.stringify({})
+                        });
+                        const data = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(data.message || 'Não foi possível enviar esta nota para a SEFAZ. Verifique os dados e tente novamente.');
+                        this.confirmacaoPendente.loading = false;
+                        this.fecharConfirmacaoPendente();
+                        window.fiscalToast?.('success', data.status === 'autorizada' ? 'NF-e autorizada pela SEFAZ.' : 'NF-e enviada para processamento.', 'Emissão fiscal');
+                        this.load(this.page);
+                    } catch (error) {
+                        window.fiscalToast?.('error', error.message || 'Não foi possível concluir o envio. Tente novamente.', 'Não foi possível enviar a NF-e');
+                    } finally {
+                        this.confirmacaoPendente.loading = false;
                     }
                 },
 

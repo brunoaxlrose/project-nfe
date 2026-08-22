@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Database\Seeders\NaturezaOperacaoSeeder;
+use App\Models\ConfiguracaoEmissor;
 
 class CatalogController extends Controller
 {
@@ -105,13 +106,16 @@ class CatalogController extends Controller
     public function destinatariosBuscar(Request $request): JsonResponse
     {
         $term = trim((string) $request->query('q', ''));
+        $documento = preg_replace('/\D+/', '', $term);
 
         return response()->json(
             Destinatario::query()
                 ->where('ativo', true)
-                ->when($term !== '', fn ($query) => $query->where(function ($search) use ($term): void {
-                    $search->where('nome_razao_social', 'ilike', '%'.$term.'%')
-                        ->orWhere('documento', 'like', '%'.preg_replace('/\D+/', '', $term).'%');
+                ->when($term !== '', fn ($query) => $query->where(function ($search) use ($term, $documento): void {
+                    $search->where('nome_razao_social', 'ilike', '%'.$term.'%');
+                    if ($documento !== '') {
+                        $search->orWhere('documento', 'like', '%'.$documento.'%');
+                    }
                 }))
                 ->orderBy('nome_razao_social')
                 ->limit(10)
@@ -277,6 +281,13 @@ class CatalogController extends Controller
 
     public function produtosSalvar(Request $request): JsonResponse
     {
+        $config = ConfiguracaoEmissor::current();
+        $request->merge([
+            'ncm' => preg_replace('/\D+/', '', (string) $request->input('ncm', '')),
+            'cfop' => preg_replace('/\D+/', '', (string) $request->input('cfop', '')),
+            'csosn' => preg_replace('/\D+/', '', (string) $request->input('csosn', '')),
+            'cst' => preg_replace('/\D+/', '', (string) $request->input('cst', '')),
+        ]);
         $data = $request->validate([
             'codigo' => ['required', 'string', 'max:60'],
             'descricao' => ['required', 'string', 'max:120'],
@@ -290,7 +301,16 @@ class CatalogController extends Controller
         ]);
 
         $data['ativo'] = $data['ativo'] ?? true;
+        $data['cfop'] = $data['cfop'] ?: $config->cfop_padrao;
+        $data['csosn'] = $data['csosn'] ?: $config->csosn_padrao;
+        $data['unidade'] = strtoupper(trim($data['unidade']));
         $data['id_empresa'] = $request->user()->id_empresa;
+
+        if (Produto::query()->where('codigo', $data['codigo'])->exists()) {
+            return response()->json([
+                'message' => 'Este código já está cadastrado. Use o botão de editar no produto existente.',
+            ], 409);
+        }
 
         $produto = Produto::create($data);
 
@@ -302,6 +322,13 @@ class CatalogController extends Controller
 
     public function produtosEditar(Request $request, Produto $produto): JsonResponse
     {
+        $config = ConfiguracaoEmissor::current();
+        $request->merge([
+            'ncm' => preg_replace('/\D+/', '', (string) $request->input('ncm', '')),
+            'cfop' => preg_replace('/\D+/', '', (string) $request->input('cfop', '')),
+            'csosn' => preg_replace('/\D+/', '', (string) $request->input('csosn', '')),
+            'cst' => preg_replace('/\D+/', '', (string) $request->input('cst', '')),
+        ]);
         $data = $request->validate([
             'codigo' => ['required', 'string', 'max:60'],
             'descricao' => ['required', 'string', 'max:120'],
@@ -314,6 +341,9 @@ class CatalogController extends Controller
             'ativo' => ['sometimes', 'boolean'],
         ]);
 
+        $data['cfop'] = $data['cfop'] ?: $config->cfop_padrao;
+        $data['csosn'] = $data['csosn'] ?: $config->csosn_padrao;
+        $data['unidade'] = strtoupper(trim($data['unidade']));
         $produto->update($data);
 
         return response()->json([

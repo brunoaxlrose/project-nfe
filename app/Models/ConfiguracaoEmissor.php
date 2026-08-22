@@ -46,6 +46,7 @@ class ConfiguracaoEmissor extends Model
         'certificado_valid_from',
         'ambiente',
         'serie_padrao',
+        'proximo_numero',
         'cfop_padrao',
         'csosn_padrao',
     ];

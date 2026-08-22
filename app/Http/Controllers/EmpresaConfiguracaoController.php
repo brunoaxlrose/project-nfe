@@ -32,11 +32,48 @@ class EmpresaConfiguracaoController extends Controller
             'logo_path',
         ])->toArray();
 
-        $data['certificado_configurado'] = filled($config->certificado_base64);
+        try {
+            $data['certificado_configurado'] = filled($config->certificado_base64);
+        } catch (\Illuminate\Contracts\Encryption\DecryptException $exception) {
+            // Permite recuperar registros criptografados com uma APP_KEY antiga.
+            // O próximo envio do certificado substituirá o valor ilegível.
+            $data['certificado_configurado'] = false;
+            DB::table($config->getTable())
+                ->where($config->getKeyName(), $config->getKey())
+                ->update([
+                    'certificado_base64' => null,
+                    'certificado_senha' => null,
+                    'certificado_storage_path' => null,
+                    'certificado_validade' => null,
+                    'certificado_valid_from' => null,
+                    'certificado_subject' => null,
+                    'certificado_issuer' => null,
+                    'certificado_serial' => null,
+                    'updated_at' => now(),
+                ]);
+            $data['certificado_dono'] = null;
+            $data['certificado_autoridade'] = null;
+            Log::warning('Certificado salvo com uma APP_KEY diferente da atual.', [
+                'id_empresa' => $config->id_empresa,
+                'exception' => $exception,
+            ]);
+        }
         $data['certificado_dono'] = $config->certificado_subject;
         $data['certificado_autoridade'] = $config->certificado_issuer;
-        $data['logo_configurada'] = filled($config->logo_path) && Storage::disk('local')->exists($config->logo_path);
-        $data['logo_data_url'] = $this->logoDataUrl($config);
+        $data['logo_configurada'] = false;
+        $data['logo_data_url'] = null;
+
+        try {
+            $data['logo_configurada'] = filled($config->logo_path)
+                && Storage::disk('local')->exists($config->logo_path);
+            $data['logo_data_url'] = $this->logoDataUrl($config);
+        } catch (\Throwable $exception) {
+            // A falha no volume de arquivos não pode impedir a leitura das configurações.
+            Log::warning('Não foi possível ler o logo da empresa.', [
+                'id_empresa' => $config->id_empresa,
+                'exception' => $exception,
+            ]);
+        }
 
         return response()->json($data);
     }
@@ -56,15 +93,27 @@ class EmpresaConfiguracaoController extends Controller
             'cnae' => $this->digits($request->input('cnae')),
             'cfop_padrao' => $this->digits($request->input('cfop_padrao')),
             'csosn_padrao' => $this->digits($request->input('csosn_padrao')),
+            'proximo_numero' => $request->filled('proximo_numero')
+                ? (int) $request->input('proximo_numero')
+                : null,
             'uf' => strtoupper((string) $request->input('uf')),
         ]);
 
         $data = $request->validate($this->rules(), $this->messages());
         $config = ConfiguracaoEmissor::current();
+
+        // Uma tela parcialmente carregada não pode apagar uma IE válida só
+        // porque o campo veio vazio no FormData. A limpeza só ocorre quando
+        // o usuário marca explicitamente a opção de isenção.
+        if (!$request->boolean('inscricao_estadual_isento') && blank($data['inscricao_estadual'] ?? null)) {
+            $data['inscricao_estadual'] = $config->inscricao_estadual;
+        }
+
         $newFiles = [];
+        $certificateReplaced = false;
 
         try {
-            DB::transaction(function () use ($request, $data, $config, &$newFiles): void {
+            DB::transaction(function () use ($request, $data, $config, &$newFiles, &$certificateReplaced): void {
                 $attributes = $data;
                 unset($attributes['logo'], $attributes['certificado'], $attributes['certificado_senha']);
 
@@ -81,19 +130,19 @@ class EmpresaConfiguracaoController extends Controller
                 }
 
                 if ($request->hasFile('certificado')) {
+                    $certificateReplaced = true;
+                    Log::info('Upload de certificado recebido.', [
+                        'id_empresa' => $config->id_empresa,
+                        'nome' => $request->file('certificado')->getClientOriginalName(),
+                        'tamanho' => $request->file('certificado')->getSize(),
+                        'erro_upload' => $request->file('certificado')->getError(),
+                    ]);
                     $certificate = $this->readCertificate(
                         $request->file('certificado'),
                         (string) ($data['certificado_senha'] ?? ''),
                     );
                     $certificatePath = $this->tenantPath('certificados', $request->file('certificado'));
-                    Storage::disk('local')->put(
-                        $certificatePath,
-                        Crypt::encryptString($certificate['contents']),
-                    );
-                    $newFiles[] = $certificatePath;
-
                     $attributes['certificado_base64'] = base64_encode($certificate['contents']);
-                    $attributes['certificado_storage_path'] = $certificatePath;
                     $attributes['certificado_senha'] = $data['certificado_senha'];
                     $attributes['certificado_validade'] = Carbon::createFromTimestamp($certificate['parsed']['validTo_time_t']);
                     $attributes['certificado_valid_from'] = !empty($certificate['parsed']['validFrom_time_t'])
@@ -102,9 +151,49 @@ class EmpresaConfiguracaoController extends Controller
                     $attributes['certificado_subject'] = $this->certificateName($certificate['parsed']['subject'] ?? []);
                     $attributes['certificado_issuer'] = $this->certificateName($certificate['parsed']['issuer'] ?? []);
                     $attributes['certificado_serial'] = (string) ($certificate['parsed']['serialNumberHex'] ?? $certificate['parsed']['serialNumber'] ?? '');
+
+                    // A cópia física é apenas um backup. O certificado principal fica
+                    // criptografado no banco; falha no volume local não deve desfazer o cadastro.
+                    try {
+                        Storage::disk('local')->put(
+                            $certificatePath,
+                            Crypt::encryptString($certificate['contents']),
+                        );
+                        $newFiles[] = $certificatePath;
+                        $attributes['certificado_storage_path'] = $certificatePath;
+                    } catch (\Throwable $exception) {
+                        Log::warning('Não foi possível criar a cópia física do certificado; o cadastro seguirá com a cópia criptografada no banco.', [
+                            'id_empresa' => $config->id_empresa,
+                            'exception' => $exception,
+                        ]);
+                        $attributes['certificado_storage_path'] = null;
+                    }
+                } else {
+                    Log::warning('Salvar configurações sem arquivo de certificado.', [
+                        'id_empresa' => $config->id_empresa,
+                        'arquivos_recebidos' => array_keys($request->allFiles()),
+                    ]);
                 }
 
-                $config->fill($attributes)->save();
+                if ($certificateReplaced) {
+                    // O valor antigo pode estar ilegível por ter sido criptografado
+                    // com outra APP_KEY. Persistimos os atributos já criptografados
+                    // diretamente para não disparar a comparação do Eloquent.
+                    $config->fill($attributes);
+                    $rawAttributes = $config->getAttributes();
+                    unset($rawAttributes[$config->getKeyName()]);
+                    $rawAttributes['updated_at'] = now();
+
+                    DB::table($config->getTable())
+                        ->where($config->getKeyName(), $config->getKey())
+                        ->update($rawAttributes);
+
+                    $config->syncOriginal();
+                } else {
+                    // Sem upload de certificado, ainda precisamos aplicar todos
+                    // os campos enviados pela tela antes de salvar.
+                    $config->fill($attributes)->save();
+                }
 
                 $empresa = Empresa::query()->whereKey($config->id_empresa)->firstOrFail();
                 $empresa->fill([
@@ -218,10 +307,14 @@ class EmpresaConfiguracaoController extends Controller
             'email' => ['nullable', 'email', 'max:120'],
             'ambiente' => ['required', 'in:1,2'],
             'serie_padrao' => ['required', 'integer', 'min:1', 'max:999'],
+            'proximo_numero' => ['nullable', 'integer', 'min:1', 'max:999999999'],
             'cfop_padrao' => ['required', 'digits:4'],
             'csosn_padrao' => ['nullable', 'digits:4'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
-            'certificado' => ['nullable', 'file', 'mimes:pfx,p12', 'max:5120'],
+            // PKCS#12 files are often reported by PHP as application/octet-stream.
+            // Validate the declared extension here and validate the actual certificate
+            // contents/password in readCertificate() below.
+            'certificado' => ['nullable', 'file', 'extensions:pfx,p12', 'max:5120'],
             'certificado_senha' => ['nullable', 'string', 'max:200'],
         ];
     }
@@ -243,7 +336,7 @@ class EmpresaConfiguracaoController extends Controller
             'codigo_municipio_ibge.digits' => 'O código IBGE deve ter 7 números.',
             'cfop_padrao.digits' => 'O CFOP padrão deve ter 4 números.',
             'csosn_padrao.digits' => 'O CSOSN padrão deve ter 4 números.',
-            'certificado.mimes' => 'Envie um certificado com extensão .pfx ou .p12.',
+            'certificado.extensions' => 'Envie um certificado com extensão .pfx ou .p12.',
             'certificado_senha.max' => 'A senha do certificado não pode exceder 200 caracteres.',
             'logo.image' => 'Envie um arquivo de imagem válido para o logotipo.',
         ];

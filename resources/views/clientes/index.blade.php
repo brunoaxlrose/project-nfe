@@ -104,7 +104,7 @@
                             <label class="relative block">
                                 <span class="label">CPF ou CNPJ <b class="text-red-600">*</b></span>
                                 <input x-model="form.documento" 
-                                       x-mask.dynamic="form.documento.replace(/\D/g, '').length > 11 ? '99.999.999/9999-99' : '999.999.999-99'"
+                                       x-mask:dynamic="form.documento.replace(/\D/g, '').length > 11 ? '99.999.999/9999-99' : '999.999.999-99'"
                                        @input="if(form.documento && form.documento.replace(/\D/g, '').length === 14) buscarCNPJ()"
                                        class="field pr-10" required placeholder="Ex: 00.000.000/0001-00 ou 000.000.000-00">
                                 <span x-show="buscandoCNPJ" x-cloak class="absolute right-3 top-9 flex h-5 w-5 items-center justify-center">

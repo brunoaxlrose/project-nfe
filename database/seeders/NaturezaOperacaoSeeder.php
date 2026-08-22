@@ -26,7 +26,7 @@ class NaturezaOperacaoSeeder extends Seeder
         ['descricao' => 'Remessa de mercadoria para demonstração', 'tipo_movimento' => 'Saída', 'cfop_padrao' => '5912', 'csosn_padrao' => '0400', 'calcula_impostos' => false],
         ['descricao' => 'Retorno de mercadoria enviada para conserto', 'tipo_movimento' => 'Entrada', 'cfop_padrao' => '1916', 'csosn_padrao' => '0400', 'calcula_impostos' => false],
         ['descricao' => 'Retorno de mercadoria enviada para demonstração', 'tipo_movimento' => 'Entrada', 'cfop_padrao' => '1913', 'csosn_padrao' => '0400', 'calcula_impostos' => false],
-        ['descricao' => 'RETORNO SIMPLES REMESSA', 'tipo_movimento' => 'Entrada', 'cfop_padrao' => '1901', 'csosn_padrao' => '0400', 'calcula_impostos' => false],
+        ['descricao' => 'RETORNO SIMPLES REMESSA', 'tipo_movimento' => 'Saída', 'cfop_padrao' => '1901', 'csosn_padrao' => '0400', 'calcula_impostos' => false],
         ['descricao' => 'Saída em bonificação', 'tipo_movimento' => 'Saída', 'cfop_padrao' => '5910', 'csosn_padrao' => '0400', 'calcula_impostos' => false],
         ['descricao' => 'Transferência de comercialização', 'tipo_movimento' => 'Entrada', 'cfop_padrao' => '1152', 'csosn_padrao' => '0900', 'calcula_impostos' => false],
         ['descricao' => 'Transferência para comercialização', 'tipo_movimento' => 'Saída', 'cfop_padrao' => '5152', 'csosn_padrao' => '0900', 'calcula_impostos' => false],

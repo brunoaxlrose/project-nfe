@@ -3,15 +3,59 @@
 namespace App\Http\Controllers;
 
 use App\Models\Nfe;
+use App\Services\NfeEmissionService;
+use App\Exceptions\NfeEmissionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class FaturamentoController extends Controller
 {
+    public function resumo(Request $request): JsonResponse
+    {
+        $porStatus = Nfe::query()
+            ->select('status', DB::raw('COUNT(*) as total'))
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $emitidas = Nfe::query()
+            ->whereNotIn('status', ['rascunho'])
+            ->count();
+
+        $timezone = 'America/Sao_Paulo';
+        $inicioVolume = Carbon::now($timezone)->subDays(6)->startOfDay()->utc();
+        $volumePorDia = Nfe::query()
+            ->whereNotIn('status', ['rascunho'])
+            ->where('created_at', '>=', $inicioVolume)
+            ->get(['created_at', 'payload'])
+            ->groupBy(fn (Nfe $nfe): string => $nfe->created_at->setTimezone($timezone)->format('Y-m-d'));
+
+        $volume = collect(range(6, 0))->map(function (int $dias) use ($timezone, $volumePorDia): array {
+            $data = Carbon::now($timezone)->subDays($dias);
+            $notas = $volumePorDia->get($data->format('Y-m-d'), collect());
+
+            return [
+                'data' => $data->format('Y-m-d'),
+                'label' => $data->locale('pt_BR')->isoFormat('ddd'),
+                'quantidade' => $notas->count(),
+                'valor' => round($notas->sum(fn (Nfe $nfe): float => $nfe->valor_total), 2),
+            ];
+        })->values();
+
+        return response()->json([
+            'notas_emitidas' => $emitidas,
+            'autorizadas' => (int) ($porStatus['autorizada'] ?? 0),
+            'processando' => (int) collect(['gerando', 'assinado', 'aguardando_retorno'])->sum(fn (string $status) => (int) ($porStatus[$status] ?? 0)),
+            'rejeitadas' => (int) ($porStatus['rejeitada'] ?? 0) + (int) ($porStatus['erro'] ?? 0),
+            'volume_7_dias' => $volume,
+            'por_status' => $porStatus,
+        ]);
+    }
+
     public function index(Request $request)
     {
         $request->merge([
@@ -30,9 +74,19 @@ class FaturamentoController extends Controller
                 'destinatario:id_destinatario,nome_razao_social',
                 'naturezaOperacao:id_natureza_operacao,nome,tipo_movimento,cfop_padrao,csosn_padrao',
             ])
-            ->select(['id_nota_fiscal','numero','serie','chave_acesso','status','protocolo','cstat','xmotivo','destinatario_documento','id_usuario','id_cliente','id_destinatario','id_natureza_operacao','created_at','danfe_path','payload']);
-        if (!empty($filters['data_inicio'])) $query->whereDate('created_at', '>=', $filters['data_inicio']);
-        if (!empty($filters['data_fim'])) $query->whereDate('created_at', '<=', $filters['data_fim']);
+                ->select(['id_nota_fiscal','numero','serie','chave_acesso','status','recibo','protocolo','cstat','xmotivo','destinatario_documento','id_usuario','id_cliente','id_destinatario','id_natureza_operacao','created_at','danfe_path','payload']);
+        // Os timestamps são armazenados em UTC, mas os filtros da tela são
+        // datas locais do usuário. Converta os limites de São Paulo para UTC
+        // antes de consultar, evitando ocultar notas emitidas após 00:00 UTC.
+        $timezone = 'America/Sao_Paulo';
+        if (!empty($filters['data_inicio'])) {
+            $inicio = Carbon::parse($filters['data_inicio'], $timezone)->startOfDay()->utc();
+            $query->where('created_at', '>=', $inicio);
+        }
+        if (!empty($filters['data_fim'])) {
+            $fim = Carbon::parse($filters['data_fim'], $timezone)->endOfDay()->utc();
+            $query->where('created_at', '<=', $fim);
+        }
         if (!empty($filters['status'])) $query->where('status', $filters['status']);
         if (!empty($filters['documento'])) $query->where('destinatario_documento', preg_replace('/\D+/', '', $filters['documento']));
         if (!empty($filters['busca'])) {
@@ -46,7 +100,7 @@ class FaturamentoController extends Controller
             });
         }
 
-        $paginated = $query->latest('id_nota_fiscal')->paginate($filters['per_page'] ?? 20)->withQueryString();
+        $paginated = $query->latest('id_nota_fiscal')->paginate($filters['per_page'] ?? 10)->withQueryString();
         $paginated->getCollection()->transform(function (Nfe $nota): array {
             return [
                 ...$nota->toArray(),
@@ -84,21 +138,25 @@ class FaturamentoController extends Controller
         ], 201);
     }
 
-    public function cancelar(Request $request, Nfe $nfe): JsonResponse
+    public function cancelar(Request $request, Nfe $nfe, NfeEmissionService $emissionService): JsonResponse
     {
-        $request->validate(['justificativa' => ['required', 'string', 'min:15', 'max:255']]);
+        $data = $request->validate(['justificativa' => ['required', 'string', 'min:15', 'max:255']]);
 
-        // Simula cancelamento autorizando localmente por agora e preenchendo as colunas
-        $nfe->update([
-            'status' => 'cancelada',
-            'data_cancelamento' => now(),
-            'motivo_cancelamento' => $request->input('justificativa'),
-        ]);
+        try {
+            $cancelada = $emissionService->cancel($nfe, $data['justificativa']);
 
-        return response()->json([
-            'message' => 'Nota Fiscal cancelada com sucesso.',
-            'nota' => $nfe,
-        ]);
+            return response()->json([
+                'message' => 'Cancelamento autorizado pela SEFAZ.',
+                'nota' => $cancelada,
+            ]);
+        } catch (NfeEmissionException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'status' => $e->nfeStatus,
+                'cstat' => $e->cstat,
+                'nota' => $nfe->fresh(),
+            ], $e->httpStatus);
+        }
     }
 
     public function destroy(Request $request, Nfe $nfe): JsonResponse
@@ -134,6 +192,16 @@ class FaturamentoController extends Controller
 
         try {
             $files = [];
+
+            if ($tipo === 'pdf' && $nfe->status === 'rascunho') {
+                $pdf = app(NfeEmissionService::class)->renderDraftDanfe($nfe);
+
+                return response($pdf, 200, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'inline; filename="danfe-previa-'.$nfe->numero.'.pdf"',
+                    'Cache-Control' => 'no-store, no-cache, must-revalidate',
+                ]);
+            }
 
             if ($tipo !== 'pdf' && $nfe->xml) {
                 $xmlName = $nfe->chave_acesso
@@ -175,7 +243,7 @@ class FaturamentoController extends Controller
             if ($tipo === 'pdf') {
                 return response()->download(
                     Storage::disk('local')->path($files['pdf']),
-                    'danfe-'.$nfe->id.'.pdf',
+                    ($nfe->chave_acesso ?: 'danfe-'.$nfe->id).'.pdf',
                     ['Content-Type' => 'application/pdf'],
                 );
             }

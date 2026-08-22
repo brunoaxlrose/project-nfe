@@ -46,8 +46,12 @@ Route::middleware(['jwt', 'json.payload'])->group(function (): void {
         ->middleware('permission:nfe.criar');
     Route::post('/nfe/{nfe}/consultar', [NfeController::class, 'consult'])
         ->middleware('permission:nfe.consultar');
+    Route::post('/nfe/{nfe}/emitir', [NfeController::class, 'emitirPendente'])
+        ->middleware('permission:nfe.criar');
 
     Route::get('/faturamento/notas', [FaturamentoController::class, 'index'])
+        ->middleware('permission:nfe.visualizar');
+    Route::get('/faturamento/resumo', [FaturamentoController::class, 'resumo'])
         ->middleware('permission:nfe.visualizar');
     Route::get('/faturamento/notas/{nfe}/download', [FaturamentoController::class, 'download'])
         ->middleware('permission:nfe.baixar');
