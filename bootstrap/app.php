@@ -16,6 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(web: __DIR__.'/../routes/web.php', api: __DIR__.'/../routes/api.php', commands: __DIR__.'/../routes/console.php', health: '/up')
     ->withCommands([__DIR__.'/../app/Console/Commands'])
     ->withMiddleware(function (Middleware $middleware): void {
+        // Render encerra o HTTPS no proxy e encaminha a requisição ao container
+        // por HTTP. Confiar no proxy faz o Laravel respeitar X-Forwarded-Proto
+        // e gerar links HTTPS para o Vite, favicon, redirects e cookies.
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'jwt' => AuthenticateJwt::class,
             'json.payload' => EnsureJsonPayload::class,
